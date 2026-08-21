@@ -1,0 +1,11 @@
+# Garmin sync output and secrets -- personal data, never commit these.
+garmin/
+garmin-ci-token.txt
+.garmin-ai/
+.garminconnect/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

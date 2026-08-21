@@ -1,0 +1,4 @@
+# Talks to Garmin Connect (unofficial API, MFA-aware, token cache built in).
+garminconnect>=0.2.24
+# garminconnect's HTTP backend; installed separately per its own README.
+curl_cffi>=0.7

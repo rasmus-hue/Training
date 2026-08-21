@@ -1,0 +1,33 @@
+name: Garmin sync
+
+on:
+  schedule:
+    # ~6am US Eastern. Cron is UTC -- shift this to fit your timezone.
+    - cron: "0 11 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r files/requirements.txt
+
+      - name: Sync Garmin data
+        env:
+          GARMIN_TOKEN_B64: ${{ secrets.GARMIN_TOKEN_B64 }}
+          GARMIN_INGEST_URL: ${{ secrets.GARMIN_INGEST_URL }}
+          GARMIN_INGEST_SECRET: ${{ secrets.SESSION_LOG_SECRET }}
+        run: |
+          python files/sync_garmin.py --days 3 --sink supabase
+          # Files-only mode (no database, no dashboard): comment the line
+          # above and uncomment below. You'd then need a separate step to
+          # do something with the garmin/ folder, since Actions runners
+          # don't persist disk between runs.
+          # python files/sync_garmin.py --days 3 --sink files --out ./garmin
