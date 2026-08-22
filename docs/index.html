@@ -119,14 +119,14 @@
 // Project settings -> API -> Project URL / anon public key.
 // The anon key is safe to publish here: the database only allows it to
 // read (see files/supabase_schema.sql), never write or delete.
-const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL_HERE";
-const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY_HERE";
+const SUPABASE_URL = "https://dpfsafgacgprzvhxhmtc.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwZnNhZmdhY2dwcnp2aHhobXRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0MjEwMDUsImV4cCI6MjEwMjk5NzAwNX0.f-ved-crVtPtXULPmQdB0nIyvga2enqywT5u8cNqm9Y";
 
 // SHA-256 of the passphrase that unlocks this page. Ask Claude to
 // generate this for you, or run in a browser console:
 //   crypto.subtle.digest("SHA-256", new TextEncoder().encode("your-passphrase"))
 //     .then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("")))
-const PASSPHRASE_SHA256 = "PASTE_YOUR_PASSPHRASE_HASH_HERE";
+const PASSPHRASE_SHA256 = "5f502f7d4fb22f2470a49481c5a11a49553a65bcc863e2a1182e750cacac5a96";
 
 async function sha256Hex(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
