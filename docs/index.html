@@ -7,40 +7,25 @@
 <title>Min træning</title>
 <style>
   :root {
-    color-scheme: light;
-    --surface-page:   #f9f9f7;
-    --surface-card:   #fcfcfb;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
+    color-scheme: dark;
+    --surface-page:   #0d0d0d;
+    --surface-card:   #1a1a19;
+    --surface-raised: #212120;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
     --text-muted:     #898781;
-    --gridline:       #e1e0d9;
-    --baseline:       #c3c2b7;
-    --border:         rgba(11,11,11,0.10);
-    --series-1:       #2a78d6; /* training / running */
-    --series-2:       #eb6834; /* bike */
-    --series-3:       #1baf7a; /* recovery / good */
-    --series-7:       #4a3aa7; /* strength */
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5; /* running */
+    --series-2:       #d95926; /* bike */
+    --series-3:       #199e70; /* recovery / good */
+    --series-7:       #9085e9; /* strength */
     --good:           #0ca30c;
-    --muted-bg:       rgba(11,11,11,0.04);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --surface-page:   #0d0d0d;
-      --surface-card:   #1a1a19;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #898781;
-      --gridline:       #2c2c2a;
-      --baseline:       #383835;
-      --border:         rgba(255,255,255,0.10);
-      --series-1:       #3987e5;
-      --series-2:       #d95926;
-      --series-3:       #199e70;
-      --series-7:       #9085e9;
-      --good:           #0ca30c;
-      --muted-bg:       rgba(255,255,255,0.06);
-    }
+    --warning:        #fab219;
+    --critical:       #e66767;
+    --muted-bg:       rgba(255,255,255,0.06);
+    --accent-grad:    linear-gradient(135deg, #14213d 0%, #0d0d0d 70%);
   }
   * { box-sizing: border-box; }
   body {
@@ -50,10 +35,20 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 56px; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 4px; }
-  .plan-strip { color: var(--text-muted); font-size: 13px; margin: 0 0 16px; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 0 56px; }
+  .hero {
+    background: var(--accent-grad);
+    padding: 22px 18px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--series-1); font-weight: 700; }
+  .hero-days { font-size: 44px; font-weight: 800; line-height: 1.05; margin: 4px 0 2px; }
+  .hero-days .unit { font-size: 16px; font-weight: 700; color: var(--text-secondary); margin-left: 6px; }
+  .hero-sub { font-size: 13px; color: var(--text-secondary); }
+  .hero-goal { display: inline-block; margin-top: 10px; font-size: 12px; font-weight: 700; padding: 5px 10px;
+    border-radius: 999px; background: rgba(57,135,229,0.18); color: var(--series-1); border: 1px solid rgba(57,135,229,0.35); }
+
+  .content { padding: 16px; }
   .tabs { display: flex; gap: 4px; margin-bottom: 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .tab-btn {
     flex: 0 0 auto; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 8px;
@@ -67,15 +62,26 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 16px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
-  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
-    color: var(--text-secondary); margin: 0 0 12px; font-weight: 600; }
-  .cols { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text-muted); margin: 0 0 12px; font-weight: 700; }
+  .cols { display: grid; grid-template-columns: 1fr; gap: 14px; }
   @media (min-width: 600px) { .cols { grid-template-columns: 1fr 1fr; } }
-  .col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
-    margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+  .col h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted);
+    margin: 0 0 10px; display: flex; align-items: center; gap: 6px; font-weight: 700; }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  .status-banner { display: flex; align-items: flex-start; gap: 12px; }
+  .status-chip { flex: 0 0 auto; font-size: 13px; font-weight: 800; padding: 6px 12px; border-radius: 999px; letter-spacing: .02em; }
+  .status-chip.good { background: rgba(12,163,12,0.18); color: #4fd94f; }
+  .status-chip.caution { background: rgba(250,178,25,0.18); color: var(--warning); }
+  .status-chip.critical { background: rgba(230,103,103,0.18); color: var(--critical); }
+  .status-text { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
+  .status-metrics { display: flex; gap: 18px; margin-top: 12px; flex-wrap: wrap; }
+  .status-metric .value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .status-metric .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+
   .session-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--gridline); }
   .session-row:last-child { border-bottom: none; }
   .check { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center;
@@ -85,33 +91,43 @@
   .session-body { flex: 1; }
   .session-title { font-size: 14px; font-weight: 600; }
   .session-desc { font-size: 13px; color: var(--text-secondary); margin-top: 1px; }
-  .session-actual { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .session-actual { font-size: 12px; color: var(--series-3); margin-top: 2px; }
+
   .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  @media (min-width: 480px) { .tiles.wide { grid-template-columns: repeat(4, 1fr); } }
   .tile { padding: 8px 4px; }
-  .tile .value { font-size: 20px; font-weight: 600; font-variant-numeric: proportional-nums; }
+  .tile .value { font-size: 20px; font-weight: 700; font-variant-numeric: proportional-nums; }
   .tile .unit { font-size: 12px; color: var(--text-muted); margin-left: 2px; }
-  .tile .label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .tile .label { font-size: 11px; color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .03em; }
   .progress-track { height: 8px; border-radius: 4px; background: var(--muted-bg); overflow: hidden; margin-top: 6px; }
   .progress-fill { height: 100%; border-radius: 4px; background: var(--series-3); }
-  .day-card { margin-bottom: 12px; }
-  .day-card h3 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--gridline); }
+  th { color: var(--text-muted); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  th.num { text-align: right; }
+  tr.today-row td { color: var(--series-1); }
+
+  svg text { fill: var(--text-muted); font-size: 9px; }
+  .bar-fill { rx: 3px; }
+
   .compare-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
     padding: 8px 0; border-bottom: 1px solid var(--gridline); font-size: 14px; }
   .compare-row:last-child { border-bottom: none; }
   .compare-row .metric { color: var(--text-secondary); }
-  .compare-row .actual { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .compare-row .actual { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
   .compare-row .target { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
-  .compare-head { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; font-size: 11px;
-    text-transform: uppercase; color: var(--text-muted); padding-bottom: 4px; }
+  .compare-head { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; font-size: 10px;
+    text-transform: uppercase; color: var(--text-muted); padding-bottom: 4px; letter-spacing: .04em; }
   .compare-head .actual, .compare-head .target { text-align: right; }
+
   .empty, .status { color: var(--text-secondary); font-size: 14px; padding: 8px 0; }
-  .gate { max-width: 320px; margin: 20vh auto; text-align: center; }
+  .gate { max-width: 320px; margin: 20vh auto; text-align: center; padding: 0 16px; }
   .gate input { font-size: 16px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface-card); color: var(--text-primary); width: 100%; margin: 12px 0; }
   .gate button { font-size: 14px; padding: 10px 16px; border-radius: 8px; border: none;
     background: var(--series-1); color: white; cursor: pointer; }
-  .gate .error { color: #e34948; font-size: 13px; min-height: 18px; }
+  .gate .error { color: var(--critical); font-size: 13px; min-height: 18px; }
   #dashboard { display: none; }
 </style>
 </head>
@@ -119,57 +135,81 @@
 
 <div id="gate" class="gate">
   <h1>Min træning</h1>
-  <p class="subtitle">Beskyttet side &mdash; indtast adgangskode</p>
+  <p class="status">Beskyttet side &mdash; indtast adgangskode</p>
   <input id="gate-input" type="password" autocomplete="off" placeholder="Adgangskode">
   <div><button id="gate-submit">Lås op</button></div>
   <div id="gate-error" class="error"></div>
 </div>
 
-<div id="dashboard" class="wrap">
-  <h1>Min træning</h1>
-  <p class="subtitle" id="last-updated">Henter data&hellip;</p>
-  <p class="plan-strip" id="plan-strip"></p>
-
-  <div class="tabs" role="tablist">
-    <button class="tab-btn" role="tab" data-tab="today" aria-selected="true">I dag</button>
-    <button class="tab-btn" role="tab" data-tab="week">7 dage frem</button>
-    <button class="tab-btn" role="tab" data-tab="review-week">Ugentlig review</button>
-    <button class="tab-btn" role="tab" data-tab="review-month">Månedlig review</button>
+<div id="dashboard">
+  <div class="hero">
+    <div class="hero-eyebrow">Halvmaraton</div>
+    <div class="hero-days"><span id="hero-days">–</span><span class="unit">dage til løbet</span></div>
+    <div class="hero-sub" id="hero-sub">Henter data&hellip;</div>
+    <div class="hero-goal" id="hero-goal">Mål: 1:50-1:55</div>
   </div>
 
-  <section id="tab-today" class="tabpanel active">
-    <div class="card">
-      <div class="cols">
-        <div class="col">
-          <h3><span class="dot" style="background:var(--series-1)"></span>Træning i dag</h3>
-          <div id="today-training"></div>
-        </div>
-        <div class="col">
-          <h3><span class="dot" style="background:var(--series-3)"></span>Restitution</h3>
-          <div id="today-recovery" class="tiles"></div>
-          <div id="today-steps"></div>
-        </div>
+  <div class="wrap">
+    <div class="content">
+      <div class="tabs" role="tablist">
+        <button class="tab-btn" role="tab" data-tab="today" aria-selected="true">I dag</button>
+        <button class="tab-btn" role="tab" data-tab="week">7 dage frem</button>
+        <button class="tab-btn" role="tab" data-tab="review-week">Ugentlig review</button>
+        <button class="tab-btn" role="tab" data-tab="review-month">Månedlig review</button>
       </div>
-    </div>
-  </section>
 
-  <section id="tab-week" class="tabpanel">
-    <div id="week-days"></div>
-  </section>
+      <section id="tab-today" class="tabpanel active">
+        <div class="card">
+          <h2>Dagens status</h2>
+          <div id="status-banner" class="status-banner"></div>
+        </div>
 
-  <section id="tab-review-week" class="tabpanel">
-    <div class="card">
-      <h2 id="review-week-title">Ugentlig review</h2>
-      <div id="review-week-body"></div>
-    </div>
-  </section>
+        <div class="card">
+          <div class="cols">
+            <div class="col">
+              <h3><span class="dot" style="background:var(--series-1)"></span>Træning i dag</h3>
+              <div id="today-training"></div>
+            </div>
+            <div class="col">
+              <h3><span class="dot" style="background:var(--series-3)"></span>Restitution</h3>
+              <div id="today-recovery" class="tiles"></div>
+              <div id="today-steps"></div>
+            </div>
+          </div>
+        </div>
 
-  <section id="tab-review-month" class="tabpanel">
-    <div class="card">
-      <h2 id="review-month-title">Seneste 30 dage</h2>
-      <div id="review-month-body"></div>
+        <div class="card">
+          <h2>Seneste aktiviteter</h2>
+          <div id="recent-activities"></div>
+        </div>
+      </section>
+
+      <section id="tab-week" class="tabpanel">
+        <div class="card">
+          <h2>Denne uge</h2>
+          <div id="week-table"></div>
+        </div>
+      </section>
+
+      <section id="tab-review-week" class="tabpanel">
+        <div class="card">
+          <h2 id="review-week-title">Ugentlig review</h2>
+          <div id="review-week-body"></div>
+        </div>
+      </section>
+
+      <section id="tab-review-month" class="tabpanel">
+        <div class="card">
+          <h2>Løbevolumen, seneste 8 uger</h2>
+          <div id="volume-chart"></div>
+        </div>
+        <div class="card">
+          <h2 id="review-month-title">Seneste 30 dage</h2>
+          <div id="review-month-body"></div>
+        </div>
+      </section>
     </div>
-  </section>
+  </div>
 </div>
 
 <script>
@@ -179,12 +219,13 @@ const PASSPHRASE_SHA256 = "5f502f7d4fb22f2470a49481c5a11a49553a65bcc863e2a1182e7
 
 const PHASE_LABEL = { base: "Opbygning", build1: "Byg 1", build2: "Byg 2", peak: "Peak", taper: "Nedtrapning", race: "Løbsuge" };
 const WEEKDAYS_DA = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
+const WEEKDAYS_SHORT_DA = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
+const RACE_DAY = "2027-06-20";
 
 async function sha256Hex(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
-
 async function checkGate() {
   if (sessionStorage.getItem("garmin-gate-ok") === "1") return true;
   const input = document.getElementById("gate-input");
@@ -205,7 +246,7 @@ async function checkGate() {
 }
 
 function fmt(value, suffix) {
-  return (value === null || value === undefined) ? "–" : `${Math.round(value * 10) / 10}${suffix || ""}`;
+  return (value === null || value === undefined || Number.isNaN(value)) ? "–" : `${Math.round(value * 10) / 10}${suffix || ""}`;
 }
 function todayISO() {
   const d = new Date();
@@ -216,6 +257,9 @@ function addDays(iso, n) {
   d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
 }
+function daysBetween(a, b) {
+  return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
+}
 function classify(type) {
   type = (type || "").toLowerCase();
   if (type.includes("run")) return "run";
@@ -223,8 +267,12 @@ function classify(type) {
   if (type.includes("strength") || type.includes("weight")) return "strength";
   return "other";
 }
-function disciplineGroup(discipline) {
-  return (discipline || "").split("_")[0]; // run / bike / strength
+function disciplineGroup(discipline) { return (discipline || "").split("_")[0]; }
+function paceMinPerKm(distanceKm, durationMin) {
+  if (!distanceKm || !durationMin) return null;
+  const p = durationMin / distanceKm;
+  const m = Math.floor(p), s = Math.round((p - m) * 60);
+  return `${m}:${String(s).padStart(2, "0")}/km`;
 }
 
 function tile(value, unit, label) {
@@ -243,7 +291,6 @@ function sessionRow(planRow, actuals) {
         ? matched.map(a => a.distance_km ? `${fmt(a.distance_km, " km")}` : (a.duration_min ? `${fmt(a.duration_min, " min")}` : "gennemført")).join(", ")
         : "gennemført")
     : null;
-
   const row = document.createElement("div");
   row.className = "session-row";
   row.innerHTML = `
@@ -256,15 +303,55 @@ function sessionRow(planRow, actuals) {
   return row;
 }
 
+function renderHero(planWeekly) {
+  const today = todayISO();
+  const daysLeft = Math.max(0, daysBetween(today, RACE_DAY));
+  document.getElementById("hero-days").textContent = daysLeft;
+  const thisWeek = planWeekly.find(w => today >= w.week_start && today < addDays(w.week_start, 7));
+  if (thisWeek) {
+    document.getElementById("hero-sub").textContent =
+      `Uge ${thisWeek.week_number} af 44 · ${PHASE_LABEL[thisWeek.phase] || thisWeek.phase}${thisWeek.cutback ? " · lettere uge" : ""}`;
+  }
+}
+
+function renderStatus(wellness) {
+  const el = document.getElementById("status-banner");
+  const sorted = [...wellness].sort((a, b) => a.date < b.date ? -1 : 1);
+  const latest = sorted[sorted.length - 1];
+  if (!latest) { el.innerHTML = `<p class="empty">Ingen data endnu.</p>`; return; }
+
+  const baseline = sorted.slice(-15, -1).filter(w => w.resting_hr != null);
+  const baselineRhr = baseline.length ? baseline.reduce((s, w) => s + w.resting_hr, 0) / baseline.length : null;
+  const rhrDelta = (latest.resting_hr != null && baselineRhr != null) ? Math.round(latest.resting_hr - baselineRhr) : null;
+
+  const readiness = latest.training_readiness;
+  let tone = "good", label = "KLAR", text = "God restitution -- kør planen som den står.";
+  if (readiness == null) { tone = "caution"; label = "INGEN DATA"; text = "Ingen readiness-måling for i dag endnu."; }
+  else if (readiness < 45) { tone = "critical"; label = "TAG DEN ROLIGT"; text = "Lav readiness -- overvej en lettere økt eller ekstra hvile i dag."; }
+  else if (readiness < 70) { tone = "caution"; label = "MED FORSIGTIGHED"; text = "Moderat readiness -- hold dig til de rolige tempi i dagens plan."; }
+  if (rhrDelta !== null && rhrDelta >= 5 && tone === "good") { tone = "caution"; label = "HOLD ØJE"; text = `Hvilepuls ${rhrDelta} bpm over dit 14-dages snit -- gå efter fornemmelse i dag.`; }
+
+  el.innerHTML = `
+    <div class="status-chip ${tone}">${label}</div>
+    <div style="flex:1">
+      <div class="status-text">${text}</div>
+      <div class="status-metrics">
+        <div class="status-metric"><div class="value">${fmt(readiness)}</div><div class="label">Readiness</div></div>
+        <div class="status-metric"><div class="value">${rhrDelta === null ? "–" : (rhrDelta > 0 ? "+" : "") + rhrDelta}</div><div class="label">RHR vs. snit</div></div>
+        <div class="status-metric"><div class="value">${fmt(latest.steps)}</div><div class="label">Skridt</div></div>
+      </div>
+    </div>`;
+}
+
 function renderToday(planDaily, wellness, activities) {
   const today = todayISO();
   const todaysPlan = planDaily.filter(p => p.date === today);
   const container = document.getElementById("today-training");
   container.innerHTML = "";
+  const actualsWithKey = activities.map(a => ({ ...a, dateKey: (a.start || "").slice(0, 10) }));
   if (todaysPlan.length === 0) {
     container.innerHTML = `<p class="empty">Ingen planlagte økter i dag.</p>`;
   } else {
-    const actualsWithKey = activities.map(a => ({ ...a, dateKey: (a.start || "").slice(0, 10) }));
     todaysPlan.forEach(p => container.appendChild(sessionRow(p, actualsWithKey)));
   }
 
@@ -281,8 +368,7 @@ function renderToday(planDaily, wellness, activities) {
   } else {
     recovery.innerHTML = `<p class="empty">Ingen data endnu.</p>`;
   }
-  const steps = w ? (w.steps || 0) : 0;
-  const stepsGoal = 12000;
+  const steps = w ? (w.steps || 0) : 0, stepsGoal = 12000;
   const pct = Math.min(100, Math.round((steps / stepsGoal) * 100));
   document.getElementById("today-steps").innerHTML = `
     <div style="margin-top:12px; font-size:13px; color:var(--text-secondary);">
@@ -291,26 +377,59 @@ function renderToday(planDaily, wellness, activities) {
     <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>`;
 }
 
-function renderWeekAhead(planDaily, activities) {
+function renderRecentActivities(activities) {
+  const rows = [...activities]
+    .sort((a, b) => (a.start < b.start ? 1 : -1))
+    .slice(0, 8);
+  const el = document.getElementById("recent-activities");
+  if (rows.length === 0) { el.innerHTML = `<p class="empty">Ingen aktiviteter endnu.</p>`; return; }
+  const body = rows.map(a => `
+    <tr>
+      <td>${(a.start || "").slice(0, 10)}</td>
+      <td>${a.name || classify(a.type)}</td>
+      <td class="num">${fmt(a.distance_km, " km")}</td>
+      <td class="num">${classify(a.type) === "run" ? (paceMinPerKm(a.distance_km, a.duration_min) || "–") : fmt(a.duration_min, " min")}</td>
+      <td class="num">${fmt(a.avg_hr, " bpm")}</td>
+    </tr>`).join("");
+  el.innerHTML = `<table>
+    <thead><tr><th>Dato</th><th>Aktivitet</th><th class="num">Distance</th><th class="num">Pace/varighed</th><th class="num">Puls</th></tr></thead>
+    <tbody>${body}</tbody></table>`;
+}
+
+function renderWeekTable(planDaily, activities) {
   const today = todayISO();
-  const days = [...Array(7)].map((_, i) => addDays(today, i));
+  const d = new Date(today + "T00:00:00");
+  const thisMonday = addDays(today, -((d.getDay() + 6) % 7));
+  const days = [...Array(7)].map((_, i) => addDays(thisMonday, i));
   const actualsWithKey = activities.map(a => ({ ...a, dateKey: (a.start || "").slice(0, 10) }));
-  const container = document.getElementById("week-days");
-  container.innerHTML = "";
-  days.forEach(day => {
+
+  let html = "";
+  days.forEach((day, i) => {
     const rows = planDaily.filter(p => p.date === day);
-    const d = new Date(day + "T00:00:00");
-    const label = `${WEEKDAYS_DA[(d.getDay() + 6) % 7]} ${day.slice(5)}`;
-    const card = document.createElement("div");
-    card.className = "card day-card";
-    card.innerHTML = `<h3>${label}${day === today ? " (i dag)" : ""}</h3>`;
+    const isToday = day === today;
+    html += `<div style="margin-bottom:14px;">
+      <h3 style="font-size:12px;font-weight:700;color:${isToday ? "var(--series-1)" : "var(--text-muted)"};text-transform:uppercase;letter-spacing:.04em;margin:0 0 6px;">
+        ${WEEKDAYS_DA[i]} ${day.slice(5)}${isToday ? " · i dag" : ""}
+      </h3>`;
     if (rows.length === 0) {
-      card.innerHTML += `<p class="empty">Ingen planlagte økter.</p>`;
+      html += `<p class="empty" style="padding:2px 0;">Hviledag</p>`;
     } else {
-      rows.forEach(p => card.appendChild(sessionRow(p, actualsWithKey)));
+      html += `<div>`;
+      rows.forEach(p => {
+        const group = disciplineGroup(p.discipline);
+        const matched = actualsWithKey.filter(a => a.dateKey === p.date && classify(a.type) === group);
+        const done = matched.length > 0;
+        html += `<div class="session-row" style="padding:6px 0;">
+          <div class="check ${done ? "done" : "todo"}" style="width:16px;height:16px;font-size:10px;">${done ? "✓" : ""}</div>
+          <div class="session-body"><span class="session-title" style="font-size:13px;">${p.title}</span>
+          <span class="session-desc" style="font-size:12px;">— ${p.prescription}</span></div>
+        </div>`;
+      });
+      html += `</div>`;
     }
-    container.appendChild(card);
+    html += `</div>`;
   });
+  document.getElementById("week-table").innerHTML = html;
 }
 
 function aggregateActuals(wellness, activities, startDate, endDate) {
@@ -327,35 +446,26 @@ function aggregateActuals(wellness, activities, startDate, endDate) {
     bikeMin: bikes.reduce((s, x) => s + (x.duration_min || 0), 0),
     strengthSessions: strength.length,
     avgSteps: w.length ? Math.round(w.reduce((s, x) => s + (x.steps || 0), 0) / w.length) : null,
-    avgSleep: w.length ? (w.reduce((s, x) => s + (x.sleep_hours || 0), 0) / w.filter(x => x.sleep_hours != null).length) || null : null,
-    avgRhr: w.length ? Math.round(w.reduce((s, x) => s + (x.resting_hr || 0), 0) / w.filter(x => x.resting_hr != null).length) || null : null,
+    avgSleep: w.filter(x => x.sleep_hours != null).length ? (w.reduce((s, x) => s + (x.sleep_hours || 0), 0) / w.filter(x => x.sleep_hours != null).length) : null,
+    avgRhr: w.filter(x => x.resting_hr != null).length ? Math.round(w.reduce((s, x) => s + (x.resting_hr || 0), 0) / w.filter(x => x.resting_hr != null).length) : null,
   };
 }
-
 function compareTable(rows) {
   let html = `<div class="compare-head"><div></div><div class="actual">Faktisk</div><div class="target">Mål</div></div>`;
-  rows.forEach(r => {
-    html += `<div class="compare-row"><div class="metric">${r.label}</div><div class="actual">${r.actual}</div><div class="target">${r.target}</div></div>`;
-  });
+  rows.forEach(r => { html += `<div class="compare-row"><div class="metric">${r.label}</div><div class="actual">${r.actual}</div><div class="target">${r.target}</div></div>`; });
   return html;
 }
-
 function renderWeekReview(planWeekly, wellness, activities) {
   const today = todayISO();
   const d = new Date(today + "T00:00:00");
   const thisMonday = addDays(today, -((d.getDay() + 6) % 7));
   const lastMonday = addDays(thisMonday, -7);
   const lastSunday = addDays(lastMonday, 6);
-
   document.getElementById("review-week-title").textContent = `Ugentlig review (${lastMonday} – ${lastSunday})`;
   const target = planWeekly.find(w => w.week_start === lastMonday);
   const actual = aggregateActuals(wellness, activities, lastMonday, lastSunday);
-
   const body = document.getElementById("review-week-body");
-  if (!target) {
-    body.innerHTML = `<p class="empty">Ingen plandata for den uge endnu.</p>`;
-    return;
-  }
+  if (!target) { body.innerHTML = `<p class="empty">Ingen plandata for den uge endnu.</p>`; return; }
   body.innerHTML = compareTable([
     { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(target.run_km_target, " km") },
     { label: "Løbeture", actual: actual.runSessions, target: target.run_sessions },
@@ -365,7 +475,6 @@ function renderWeekReview(planWeekly, wellness, activities) {
     { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(target.steps_goal) },
   ]);
 }
-
 function renderMonthReview(planWeekly, wellness, activities) {
   const today = todayISO();
   const start = addDays(today, -29);
@@ -373,7 +482,6 @@ function renderMonthReview(planWeekly, wellness, activities) {
   const weeksInRange = planWeekly.filter(w => w.week_start >= start && w.week_start <= today);
   const targetSum = (key) => weeksInRange.reduce((s, w) => s + (w[key] || 0), 0);
   const targetAvg = (key) => weeksInRange.length ? Math.round(weeksInRange.reduce((s, w) => s + (w[key] || 0), 0) / weeksInRange.length) : null;
-
   document.getElementById("review-month-body").innerHTML = compareTable([
     { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(targetSum("run_km_target"), " km") },
     { label: "Løbeture", actual: actual.runSessions, target: targetSum("run_sessions") },
@@ -383,6 +491,38 @@ function renderMonthReview(planWeekly, wellness, activities) {
     { label: "Snit søvn", actual: fmt(actual.avgSleep, " t"), target: "–" },
     { label: "Snit hvilepuls", actual: fmt(actual.avgRhr, " bpm"), target: "–" },
   ]);
+}
+
+function barChart(data, key, color, height = 150) {
+  const width = 680, padL = 8, padR = 8, padT = 14, padB = 22;
+  const max = Math.max(1, ...data.map(d => d[key]));
+  const n = data.length;
+  const slot = (width - padL - padR) / n;
+  const bw = slot * 0.55;
+  let bars = "";
+  data.forEach((d, i) => {
+    const x = padL + i * slot + (slot - bw) / 2;
+    const h = (d[key] / max) * (height - padT - padB);
+    const y = height - padB - h;
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}"><title>Uge ${d.label}: ${fmt(d[key])} km</title></rect>`;
+    bars += `<text x="${(x + bw / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" fill="var(--text-secondary)">${fmt(d[key])}</text>`;
+    bars += `<text x="${(x + bw / 2).toFixed(1)}" y="${height - 6}" text-anchor="middle">${d.label}</text>`;
+  });
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">${bars}</svg>`;
+}
+function renderVolumeChart(activities) {
+  const today = todayISO();
+  const d = new Date(today + "T00:00:00");
+  const thisMonday = addDays(today, -((d.getDay() + 6) % 7));
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const monday = addDays(thisMonday, -7 * i);
+    const sunday = addDays(monday, 6);
+    const km = activities.filter(a => classify(a.type) === "run" && (a.start || "").slice(0, 10) >= monday && (a.start || "").slice(0, 10) <= sunday)
+      .reduce((s, a) => s + (a.distance_km || 0), 0);
+    weeks.push({ label: monday.slice(5), km: Math.round(km * 10) / 10 });
+  }
+  document.getElementById("volume-chart").innerHTML = barChart(weeks, "km", getComputedStyle(document.documentElement).getPropertyValue("--series-1").trim());
 }
 
 function setupTabs() {
@@ -403,8 +543,8 @@ async function loadDashboard() {
   let wellness = [], activities = [], planWeekly = [], planDaily = [];
   try {
     const [wRes, aRes, pwRes, pdRes] = await Promise.all([
-      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.asc&limit=60`, { headers }),
-      fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=60`, { headers }),
+      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.asc&limit=90`, { headers }),
+      fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=200`, { headers }),
       fetch(`${base}/rest/v1/plan_weekly?select=*&order=week_start.asc&limit=52`, { headers }),
       fetch(`${base}/rest/v1/plan_daily?select=*&order=date.asc&limit=100`, { headers }),
     ]);
@@ -413,23 +553,18 @@ async function loadDashboard() {
     planWeekly = await pwRes.json();
     planDaily = await pdRes.json();
   } catch (e) {
-    document.getElementById("last-updated").textContent = "Kunne ikke hente data. Tjek Supabase-opsætningen.";
+    document.getElementById("hero-sub").textContent = "Kunne ikke hente data. Tjek Supabase-opsætningen.";
     return;
   }
 
-  const today = todayISO();
-  document.getElementById("last-updated").textContent = `Opdateret til: ${today}`;
-
-  const thisWeek = planWeekly.find(w => today >= w.week_start && today < addDays(w.week_start, 7));
-  if (thisWeek) {
-    document.getElementById("plan-strip").textContent =
-      `Uge ${thisWeek.week_number} af 44 · ${PHASE_LABEL[thisWeek.phase] || thisWeek.phase}${thisWeek.cutback ? " (lettere uge)" : ""}`;
-  }
-
+  renderHero(planWeekly);
+  renderStatus(wellness);
   renderToday(planDaily, wellness, activities);
-  renderWeekAhead(planDaily, activities);
+  renderRecentActivities(activities);
+  renderWeekTable(planDaily, activities);
   renderWeekReview(planWeekly, wellness, activities);
   renderMonthReview(planWeekly, wellness, activities);
+  renderVolumeChart(activities);
   setupTabs();
 }
 
