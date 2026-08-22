@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Garmin recovery</title>
+<title>Min træning</title>
 <style>
   :root {
     color-scheme: light;
@@ -16,8 +16,12 @@
     --gridline:       #e1e0d9;
     --baseline:       #c3c2b7;
     --border:         rgba(11,11,11,0.10);
-    --series-1:       #2a78d6; /* resting HR */
-    --series-3:       #1baf7a; /* sleep */
+    --series-1:       #2a78d6; /* training / running */
+    --series-2:       #eb6834; /* bike */
+    --series-3:       #1baf7a; /* recovery / good */
+    --series-7:       #4a3aa7; /* strength */
+    --good:           #0ca30c;
+    --muted-bg:       rgba(11,11,11,0.04);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -31,7 +35,11 @@
       --baseline:       #383835;
       --border:         rgba(255,255,255,0.10);
       --series-1:       #3987e5;
+      --series-2:       #d95926;
       --series-3:       #199e70;
+      --series-7:       #9085e9;
+      --good:           #0ca30c;
+      --muted-bg:       rgba(255,255,255,0.06);
     }
   }
   * { box-sizing: border-box; }
@@ -42,9 +50,18 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 56px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
-  .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }
+  .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 4px; }
+  .plan-strip { color: var(--text-muted); font-size: 13px; margin: 0 0 16px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-btn {
+    flex: 0 0 auto; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-card); color: var(--text-secondary); cursor: pointer;
+  }
+  .tab-btn[aria-selected="true"] { background: var(--series-1); color: white; border-color: var(--series-1); }
+  .tabpanel { display: none; }
+  .tabpanel.active { display: block; }
   .card {
     background: var(--surface-card);
     border: 1px solid var(--border);
@@ -54,21 +71,40 @@
   }
   .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
     color: var(--text-secondary); margin: 0 0 12px; font-weight: 600; }
+  .cols { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media (min-width: 600px) { .cols { grid-template-columns: 1fr 1fr; } }
+  .col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
+    margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .session-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--gridline); }
+  .session-row:last-child { border-bottom: none; }
+  .check { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; margin-top: 1px; }
+  .check.done { background: var(--good); color: white; }
+  .check.todo { background: var(--muted-bg); color: var(--text-muted); border: 1px solid var(--border); }
+  .session-body { flex: 1; }
+  .session-title { font-size: 14px; font-weight: 600; }
+  .session-desc { font-size: 13px; color: var(--text-secondary); margin-top: 1px; }
+  .session-actual { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  @media (min-width: 480px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
-  .tile { padding: 10px 4px; }
-  .tile .value { font-size: 22px; font-weight: 600; font-variant-numeric: proportional-nums; }
+  @media (min-width: 480px) { .tiles.wide { grid-template-columns: repeat(4, 1fr); } }
+  .tile { padding: 8px 4px; }
+  .tile .value { font-size: 20px; font-weight: 600; font-variant-numeric: proportional-nums; }
   .tile .unit { font-size: 12px; color: var(--text-muted); margin-left: 2px; }
   .tile .label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
-  svg text { fill: var(--text-muted); font-size: 10px; }
-  .chart-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .chart-dot { r: 2.5; }
-  .chart-grid { stroke: var(--gridline); stroke-width: 1; }
-  .chart-baseline { stroke: var(--baseline); stroke-width: 1; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--gridline); }
-  th { color: var(--text-secondary); font-weight: 600; font-size: 12px; text-transform: uppercase; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .progress-track { height: 8px; border-radius: 4px; background: var(--muted-bg); overflow: hidden; margin-top: 6px; }
+  .progress-fill { height: 100%; border-radius: 4px; background: var(--series-3); }
+  .day-card { margin-bottom: 12px; }
+  .day-card h3 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
+  .compare-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--gridline); font-size: 14px; }
+  .compare-row:last-child { border-bottom: none; }
+  .compare-row .metric { color: var(--text-secondary); }
+  .compare-row .actual { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .compare-row .target { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
+  .compare-head { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; font-size: 11px;
+    text-transform: uppercase; color: var(--text-muted); padding-bottom: 4px; }
+  .compare-head .actual, .compare-head .target { text-align: right; }
   .empty, .status { color: var(--text-secondary); font-size: 14px; padding: 8px 0; }
   .gate { max-width: 320px; margin: 20vh auto; text-align: center; }
   .gate input { font-size: 16px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
@@ -82,7 +118,7 @@
 <body>
 
 <div id="gate" class="gate">
-  <h1>Garmin recovery</h1>
+  <h1>Min træning</h1>
   <p class="subtitle">Beskyttet side &mdash; indtast adgangskode</p>
   <input id="gate-input" type="password" autocomplete="off" placeholder="Adgangskode">
   <div><button id="gate-submit">Lås op</button></div>
@@ -90,43 +126,59 @@
 </div>
 
 <div id="dashboard" class="wrap">
-  <h1>Garmin recovery</h1>
+  <h1>Min træning</h1>
   <p class="subtitle" id="last-updated">Henter data&hellip;</p>
+  <p class="plan-strip" id="plan-strip"></p>
 
-  <div class="card">
-    <h2>I dag</h2>
-    <div id="today-tiles" class="tiles"></div>
+  <div class="tabs" role="tablist">
+    <button class="tab-btn" role="tab" data-tab="today" aria-selected="true">I dag</button>
+    <button class="tab-btn" role="tab" data-tab="week">7 dage frem</button>
+    <button class="tab-btn" role="tab" data-tab="review-week">Ugentlig review</button>
+    <button class="tab-btn" role="tab" data-tab="review-month">Månedlig review</button>
   </div>
 
-  <div class="card">
-    <h2>Hvilepuls, sidste 14 dage</h2>
-    <div id="chart-rhr"></div>
-  </div>
+  <section id="tab-today" class="tabpanel active">
+    <div class="card">
+      <div class="cols">
+        <div class="col">
+          <h3><span class="dot" style="background:var(--series-1)"></span>Træning i dag</h3>
+          <div id="today-training"></div>
+        </div>
+        <div class="col">
+          <h3><span class="dot" style="background:var(--series-3)"></span>Restitution</h3>
+          <div id="today-recovery" class="tiles"></div>
+          <div id="today-steps"></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-  <div class="card">
-    <h2>S&oslash;vn (timer), sidste 14 dage</h2>
-    <div id="chart-sleep"></div>
-  </div>
+  <section id="tab-week" class="tabpanel">
+    <div id="week-days"></div>
+  </section>
 
-  <div class="card">
-    <h2>Seneste aktiviteter</h2>
-    <div id="activities"></div>
-  </div>
+  <section id="tab-review-week" class="tabpanel">
+    <div class="card">
+      <h2 id="review-week-title">Ugentlig review</h2>
+      <div id="review-week-body"></div>
+    </div>
+  </section>
+
+  <section id="tab-review-month" class="tabpanel">
+    <div class="card">
+      <h2 id="review-month-title">Seneste 30 dage</h2>
+      <div id="review-month-body"></div>
+    </div>
+  </section>
 </div>
 
 <script>
-// ---- Fill these in after you create your Supabase project ----
-// Project settings -> API -> Project URL / anon public key.
-// The anon key is safe to publish here: the database only allows it to
-// read (see files/supabase_schema.sql), never write or delete.
 const SUPABASE_URL = "https://dpfsafgacgprzvhxhmtc.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwZnNhZmdhY2dwcnp2aHhobXRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0MjEwMDUsImV4cCI6MjEwMjk5NzAwNX0.f-ved-crVtPtXULPmQdB0nIyvga2enqywT5u8cNqm9Y";
-
-// SHA-256 of the passphrase that unlocks this page. Ask Claude to
-// generate this for you, or run in a browser console:
-//   crypto.subtle.digest("SHA-256", new TextEncoder().encode("your-passphrase"))
-//     .then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("")))
 const PASSPHRASE_SHA256 = "5f502f7d4fb22f2470a49481c5a11a49553a65bcc863e2a1182e750cacac5a96";
+
+const PHASE_LABEL = { base: "Opbygning", build1: "Byg 1", build2: "Byg 2", peak: "Peak", taper: "Nedtrapning", race: "Løbsuge" };
+const WEEKDAYS_DA = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
 
 async function sha256Hex(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -153,7 +205,26 @@ async function checkGate() {
 }
 
 function fmt(value, suffix) {
-  return (value === null || value === undefined) ? "–" : `${value}${suffix || ""}`;
+  return (value === null || value === undefined) ? "–" : `${Math.round(value * 10) / 10}${suffix || ""}`;
+}
+function todayISO() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+function addDays(iso, n) {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function classify(type) {
+  type = (type || "").toLowerCase();
+  if (type.includes("run")) return "run";
+  if (type.includes("cycl") || type.includes("bik")) return "bike";
+  if (type.includes("strength") || type.includes("weight")) return "strength";
+  return "other";
+}
+function disciplineGroup(discipline) {
+  return (discipline || "").split("_")[0]; // run / bike / strength
 }
 
 function tile(value, unit, label) {
@@ -163,100 +234,203 @@ function tile(value, unit, label) {
   return div;
 }
 
-function lineChart(rows, key, color, height = 120) {
-  const width = 640;
-  const padL = 32, padR = 8, padT = 10, padB = 20;
-  const values = rows.map(r => r[key]).filter(v => v !== null && v !== undefined);
-  if (values.length === 0) return `<p class="empty">Ingen data endnu.</p>`;
+function sessionRow(planRow, actuals) {
+  const group = disciplineGroup(planRow.discipline);
+  const matched = actuals.filter(a => a.dateKey === planRow.date && classify(a.type) === group);
+  const done = matched.length > 0;
+  const actualText = done
+    ? (group === "run" || group === "bike"
+        ? matched.map(a => a.distance_km ? `${fmt(a.distance_km, " km")}` : (a.duration_min ? `${fmt(a.duration_min, " min")}` : "gennemført")).join(", ")
+        : "gennemført")
+    : null;
 
-  const min = Math.min(...values), max = Math.max(...values);
-  const lo = min === max ? min - 1 : min - (max - min) * 0.1;
-  const hi = min === max ? max + 1 : max + (max - min) * 0.1;
-  const n = rows.length;
-  const x = i => padL + (i / Math.max(n - 1, 1)) * (width - padL - padR);
-  const y = v => padT + (1 - (v - lo) / (hi - lo)) * (height - padT - padB);
+  const row = document.createElement("div");
+  row.className = "session-row";
+  row.innerHTML = `
+    <div class="check ${done ? "done" : "todo"}">${done ? "✓" : ""}</div>
+    <div class="session-body">
+      <div class="session-title">${planRow.title || ""}</div>
+      <div class="session-desc">${planRow.prescription || ""}</div>
+      ${actualText ? `<div class="session-actual">Faktisk: ${actualText}</div>` : ""}
+    </div>`;
+  return row;
+}
 
-  let path = "", dots = "";
-  let started = false;
-  rows.forEach((r, i) => {
-    const v = r[key];
-    if (v === null || v === undefined) { started = false; return; }
-    path += (started ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1) + " ";
-    started = true;
-    dots += `<circle class="chart-dot" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" fill="${color}"><title>${r.date}: ${v}</title></circle>`;
+function renderToday(planDaily, wellness, activities) {
+  const today = todayISO();
+  const todaysPlan = planDaily.filter(p => p.date === today);
+  const container = document.getElementById("today-training");
+  container.innerHTML = "";
+  if (todaysPlan.length === 0) {
+    container.innerHTML = `<p class="empty">Ingen planlagte økter i dag.</p>`;
+  } else {
+    const actualsWithKey = activities.map(a => ({ ...a, dateKey: (a.start || "").slice(0, 10) }));
+    todaysPlan.forEach(p => container.appendChild(sessionRow(p, actualsWithKey)));
+  }
+
+  const w = wellness.find(w => w.date === today) || wellness[wellness.length - 1];
+  const recovery = document.getElementById("today-recovery");
+  recovery.innerHTML = "";
+  if (w) {
+    recovery.append(
+      tile(fmt(w.resting_hr), " bpm", "Hvilepuls"),
+      tile(fmt(w.hrv), " ms", "HRV"),
+      tile(fmt(w.sleep_hours), " t", "Søvn"),
+      tile(fmt(w.training_readiness), "", "Readiness"),
+    );
+  } else {
+    recovery.innerHTML = `<p class="empty">Ingen data endnu.</p>`;
+  }
+  const steps = w ? (w.steps || 0) : 0;
+  const stepsGoal = 12000;
+  const pct = Math.min(100, Math.round((steps / stepsGoal) * 100));
+  document.getElementById("today-steps").innerHTML = `
+    <div style="margin-top:12px; font-size:13px; color:var(--text-secondary);">
+      Skridt: <strong style="color:var(--text-primary)">${steps}</strong> / ${stepsGoal}
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>`;
+}
+
+function renderWeekAhead(planDaily, activities) {
+  const today = todayISO();
+  const days = [...Array(7)].map((_, i) => addDays(today, i));
+  const actualsWithKey = activities.map(a => ({ ...a, dateKey: (a.start || "").slice(0, 10) }));
+  const container = document.getElementById("week-days");
+  container.innerHTML = "";
+  days.forEach(day => {
+    const rows = planDaily.filter(p => p.date === day);
+    const d = new Date(day + "T00:00:00");
+    const label = `${WEEKDAYS_DA[(d.getDay() + 6) % 7]} ${day.slice(5)}`;
+    const card = document.createElement("div");
+    card.className = "card day-card";
+    card.innerHTML = `<h3>${label}${day === today ? " (i dag)" : ""}</h3>`;
+    if (rows.length === 0) {
+      card.innerHTML += `<p class="empty">Ingen planlagte økter.</p>`;
+    } else {
+      rows.forEach(p => card.appendChild(sessionRow(p, actualsWithKey)));
+    }
+    container.appendChild(card);
   });
+}
 
-  const gridY = [lo + (hi - lo) * 0.25, lo + (hi - lo) * 0.75];
-  const gridLines = gridY.map(v => `<line class="chart-grid" x1="${padL}" x2="${width - padR}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>`).join("");
-  const firstLabel = rows[0] ? rows[0].date.slice(5) : "";
-  const lastLabel = rows[n - 1] ? rows[n - 1].date.slice(5) : "";
+function aggregateActuals(wellness, activities, startDate, endDate) {
+  const inRange = d => d >= startDate && d <= endDate;
+  const w = wellness.filter(x => inRange(x.date));
+  const a = activities.filter(x => inRange((x.start || "").slice(0, 10)));
+  const runs = a.filter(x => classify(x.type) === "run");
+  const bikes = a.filter(x => classify(x.type) === "bike");
+  const strength = a.filter(x => classify(x.type) === "strength");
+  return {
+    runKm: runs.reduce((s, x) => s + (x.distance_km || 0), 0),
+    runSessions: runs.length,
+    bikeSessions: bikes.length,
+    bikeMin: bikes.reduce((s, x) => s + (x.duration_min || 0), 0),
+    strengthSessions: strength.length,
+    avgSteps: w.length ? Math.round(w.reduce((s, x) => s + (x.steps || 0), 0) / w.length) : null,
+    avgSleep: w.length ? (w.reduce((s, x) => s + (x.sleep_hours || 0), 0) / w.filter(x => x.sleep_hours != null).length) || null : null,
+    avgRhr: w.length ? Math.round(w.reduce((s, x) => s + (x.resting_hr || 0), 0) / w.filter(x => x.resting_hr != null).length) || null : null,
+  };
+}
 
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">
-    ${gridLines}
-    <line class="chart-baseline" x1="${padL}" x2="${width - padR}" y1="${(height - padB).toFixed(1)}" y2="${(height - padB).toFixed(1)}"/>
-    <path class="chart-line" d="${path}" stroke="${color}"/>
-    ${dots}
-    <text x="${padL}" y="${height - 4}">${firstLabel}</text>
-    <text x="${width - padR}" y="${height - 4}" text-anchor="end">${lastLabel}</text>
-  </svg>`;
+function compareTable(rows) {
+  let html = `<div class="compare-head"><div></div><div class="actual">Faktisk</div><div class="target">Mål</div></div>`;
+  rows.forEach(r => {
+    html += `<div class="compare-row"><div class="metric">${r.label}</div><div class="actual">${r.actual}</div><div class="target">${r.target}</div></div>`;
+  });
+  return html;
+}
+
+function renderWeekReview(planWeekly, wellness, activities) {
+  const today = todayISO();
+  const d = new Date(today + "T00:00:00");
+  const thisMonday = addDays(today, -((d.getDay() + 6) % 7));
+  const lastMonday = addDays(thisMonday, -7);
+  const lastSunday = addDays(lastMonday, 6);
+
+  document.getElementById("review-week-title").textContent = `Ugentlig review (${lastMonday} – ${lastSunday})`;
+  const target = planWeekly.find(w => w.week_start === lastMonday);
+  const actual = aggregateActuals(wellness, activities, lastMonday, lastSunday);
+
+  const body = document.getElementById("review-week-body");
+  if (!target) {
+    body.innerHTML = `<p class="empty">Ingen plandata for den uge endnu.</p>`;
+    return;
+  }
+  body.innerHTML = compareTable([
+    { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(target.run_km_target, " km") },
+    { label: "Løbeture", actual: actual.runSessions, target: target.run_sessions },
+    { label: "Zwift-ture", actual: actual.bikeSessions, target: target.bike_sessions },
+    { label: "Zwift (min)", actual: fmt(actual.bikeMin, " min"), target: fmt(target.bike_minutes_target, " min") },
+    { label: "Styrkepas", actual: actual.strengthSessions, target: target.strength_push + target.strength_pull + target.strength_legs },
+    { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(target.steps_goal) },
+  ]);
+}
+
+function renderMonthReview(planWeekly, wellness, activities) {
+  const today = todayISO();
+  const start = addDays(today, -29);
+  const actual = aggregateActuals(wellness, activities, start, today);
+  const weeksInRange = planWeekly.filter(w => w.week_start >= start && w.week_start <= today);
+  const targetSum = (key) => weeksInRange.reduce((s, w) => s + (w[key] || 0), 0);
+  const targetAvg = (key) => weeksInRange.length ? Math.round(weeksInRange.reduce((s, w) => s + (w[key] || 0), 0) / weeksInRange.length) : null;
+
+  document.getElementById("review-month-body").innerHTML = compareTable([
+    { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(targetSum("run_km_target"), " km") },
+    { label: "Løbeture", actual: actual.runSessions, target: targetSum("run_sessions") },
+    { label: "Zwift-ture", actual: actual.bikeSessions, target: targetSum("bike_sessions") },
+    { label: "Styrkepas", actual: actual.strengthSessions, target: weeksInRange.reduce((s, w) => s + w.strength_push + w.strength_pull + w.strength_legs, 0) },
+    { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(targetAvg("steps_goal")) },
+    { label: "Snit søvn", actual: fmt(actual.avgSleep, " t"), target: "–" },
+    { label: "Snit hvilepuls", actual: fmt(actual.avgRhr, " bpm"), target: "–" },
+  ]);
+}
+
+function setupTabs() {
+  const buttons = document.querySelectorAll(".tab-btn");
+  buttons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      buttons.forEach(b => b.setAttribute("aria-selected", "false"));
+      btn.setAttribute("aria-selected", "true");
+      document.querySelectorAll(".tabpanel").forEach(p => p.classList.remove("active"));
+      document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    });
+  });
 }
 
 async function loadDashboard() {
   const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
   const base = SUPABASE_URL.replace(/\/$/, "");
-
-  let wellness = [], activities = [];
+  let wellness = [], activities = [], planWeekly = [], planDaily = [];
   try {
-    const [wRes, aRes] = await Promise.all([
-      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.asc&limit=14`, { headers }),
-      fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=10`, { headers }),
+    const [wRes, aRes, pwRes, pdRes] = await Promise.all([
+      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.asc&limit=60`, { headers }),
+      fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=60`, { headers }),
+      fetch(`${base}/rest/v1/plan_weekly?select=*&order=week_start.asc&limit=52`, { headers }),
+      fetch(`${base}/rest/v1/plan_daily?select=*&order=date.asc&limit=100`, { headers }),
     ]);
     wellness = await wRes.json();
     activities = await aRes.json();
+    planWeekly = await pwRes.json();
+    planDaily = await pdRes.json();
   } catch (e) {
     document.getElementById("last-updated").textContent = "Kunne ikke hente data. Tjek Supabase-opsætningen.";
     return;
   }
 
-  const today = wellness[wellness.length - 1];
-  document.getElementById("last-updated").textContent = today
-    ? `Sidste data: ${today.date}`
-    : "Ingen data endnu — kør sync-scriptet først.";
+  const today = todayISO();
+  document.getElementById("last-updated").textContent = `Opdateret til: ${today}`;
 
-  const tiles = document.getElementById("today-tiles");
-  if (today) {
-    tiles.append(
-      tile(fmt(today.resting_hr), " bpm", "Hvilepuls"),
-      tile(fmt(today.hrv), " ms", "HRV"),
-      tile(fmt(today.sleep_hours), " t", "Søvn"),
-      tile(fmt(today.training_readiness), "", "Readiness"),
-      tile(fmt(today.body_battery_low) + " → " + fmt(today.body_battery_high), "", "Body battery"),
-      tile(fmt(today.stress_avg), "", "Stress"),
-      tile(fmt(today.steps), "", "Skridt"),
-    );
-  } else {
-    tiles.append(Object.assign(document.createElement("p"), { className: "empty", textContent: "Ingen data endnu." }));
+  const thisWeek = planWeekly.find(w => today >= w.week_start && today < addDays(w.week_start, 7));
+  if (thisWeek) {
+    document.getElementById("plan-strip").textContent =
+      `Uge ${thisWeek.week_number} af 44 · ${PHASE_LABEL[thisWeek.phase] || thisWeek.phase}${thisWeek.cutback ? " (lettere uge)" : ""}`;
   }
 
-  document.getElementById("chart-rhr").innerHTML = lineChart(wellness, "resting_hr", getComputedStyle(document.documentElement).getPropertyValue("--series-1").trim());
-  document.getElementById("chart-sleep").innerHTML = lineChart(wellness, "sleep_hours", getComputedStyle(document.documentElement).getPropertyValue("--series-3").trim());
-
-  const activitiesDiv = document.getElementById("activities");
-  if (activities.length === 0) {
-    activitiesDiv.innerHTML = `<p class="empty">Ingen aktiviteter endnu.</p>`;
-  } else {
-    const rows = activities.map(a => `
-      <tr>
-        <td>${a.name || "–"}<br><span style="color:var(--text-muted); font-size:12px;">${(a.start || "").slice(0, 10)}</span></td>
-        <td class="num">${fmt(a.duration_min, " min")}</td>
-        <td class="num">${fmt(a.distance_km, " km")}</td>
-        <td class="num">${fmt(a.avg_hr, " bpm")}</td>
-      </tr>`).join("");
-    activitiesDiv.innerHTML = `<table>
-      <thead><tr><th>Aktivitet</th><th>Varighed</th><th>Distance</th><th>Puls</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-  }
+  renderToday(planDaily, wellness, activities);
+  renderWeekAhead(planDaily, activities);
+  renderWeekReview(planWeekly, wellness, activities);
+  renderMonthReview(planWeekly, wellness, activities);
+  setupTabs();
 }
 
 (async () => {
