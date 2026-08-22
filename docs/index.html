@@ -225,6 +225,10 @@
           <h2 id="review-month-title">Seneste 30 dage</h2>
           <div id="review-month-body"></div>
         </div>
+        <div class="card">
+          <h2>Løft-udvikling, seneste 30 dage</h2>
+          <div id="exercise-progress-body"></div>
+        </div>
       </section>
     </div>
   </div>
@@ -285,10 +289,13 @@ function weekdayMon0(iso) {
 function daysBetween(a, b) {
   return Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / 86400000);
 }
-function classify(type) {
-  type = (type || "").toLowerCase();
+function classify(activity) {
+  const type = ((activity && activity.type) || "").toLowerCase();
+  const name = ((activity && activity.name) || "").toLowerCase();
   if (type.includes("run")) return "run";
-  if (type.includes("cycl") || type.includes("bik")) return "bike";
+  // Garmin labels indoor/Zwift rides "virtual_ride" (no "cycl"/"bik" in it),
+  // so also match "ride" and fall back to the activity name.
+  if (type.includes("cycl") || type.includes("bik") || type.includes("ride") || name.includes("zwift")) return "bike";
   if (type.includes("strength") || type.includes("weight")) return "strength";
   return "other";
 }
@@ -381,7 +388,7 @@ function tile(value, unit, label) {
 
 function sessionRow(planRow, actuals, phase) {
   const group = disciplineGroup(planRow.discipline);
-  const matched = actuals.filter(a => a.dateKey === planRow.date && classify(a.type) === group);
+  const matched = actuals.filter(a => a.dateKey === planRow.date && classify(a) === group);
   const done = matched.length > 0;
   const actualText = done
     ? (group === "run" || group === "bike"
@@ -422,7 +429,7 @@ async function saveStrengthValue(date, discipline, exercise, unit, value) {
 }
 
 function strengthSessionRow(planRow, actuals, phase, strengthLog) {
-  const matched = actuals.filter(a => a.dateKey === planRow.date && classify(a.type) === "strength");
+  const matched = actuals.filter(a => a.dateKey === planRow.date && classify(a) === "strength");
   const done = matched.length > 0;
   const focus = focusTextFor(planRow.discipline, phase);
   const exercises = STRENGTH_EXERCISES[planRow.discipline] || [];
@@ -563,9 +570,9 @@ function renderRecentActivities(activities) {
   const body = rows.map(a => `
     <tr>
       <td>${(a.start || "").slice(0, 10)}</td>
-      <td>${a.name || classify(a.type)}</td>
+      <td>${a.name || classify(a)}</td>
       <td class="num">${fmt(a.distance_km, " km")}</td>
-      <td class="num">${classify(a.type) === "run" ? (paceMinPerKm(a.distance_km, a.duration_min) || "–") : fmt(a.duration_min, " min")}</td>
+      <td class="num">${classify(a) === "run" ? (paceMinPerKm(a.distance_km, a.duration_min) || "–") : fmt(a.duration_min, " min")}</td>
       <td class="num">${fmt(a.avg_hr, " bpm")}</td>
     </tr>`).join("");
   el.innerHTML = `<table>
@@ -593,7 +600,7 @@ function renderWeekTable(planDaily, activities) {
       html += `<div>`;
       rows.forEach(p => {
         const group = disciplineGroup(p.discipline);
-        const matched = actualsWithKey.filter(a => a.dateKey === p.date && classify(a.type) === group);
+        const matched = actualsWithKey.filter(a => a.dateKey === p.date && classify(a) === group);
         const done = matched.length > 0;
         html += `<div class="session-row" style="padding:6px 0;">
           <div class="check ${done ? "done" : "todo"}" style="width:16px;height:16px;font-size:10px;">${done ? "✓" : ""}</div>
@@ -612,9 +619,9 @@ function aggregateActuals(wellness, activities, startDate, endDate) {
   const inRange = d => d >= startDate && d <= endDate;
   const w = wellness.filter(x => inRange(x.date));
   const a = activities.filter(x => inRange((x.start || "").slice(0, 10)));
-  const runs = a.filter(x => classify(x.type) === "run");
-  const bikes = a.filter(x => classify(x.type) === "bike");
-  const strength = a.filter(x => classify(x.type) === "strength");
+  const runs = a.filter(x => classify(x) === "run");
+  const bikes = a.filter(x => classify(x) === "bike");
+  const strength = a.filter(x => classify(x) === "strength");
   return {
     runKm: runs.reduce((s, x) => s + (x.distance_km || 0), 0),
     runSessions: runs.length,
@@ -626,6 +633,57 @@ function aggregateActuals(wellness, activities, startDate, endDate) {
     avgRhr: w.filter(x => x.resting_hr != null).length ? Math.round(w.reduce((s, x) => s + (x.resting_hr || 0), 0) / w.filter(x => x.resting_hr != null).length) : null,
   };
 }
+const STRENGTH_DISCIPLINE_LABEL = { strength_push: "Push", strength_pull: "Pull", strength_legs: "Legs" };
+
+function strengthDisciplineCounts(planDaily, activities, strengthLog, start, end) {
+  const plannedInRange = planDaily.filter(p => p.date >= start && p.date <= end && disciplineGroup(p.discipline) === "strength");
+  const strengthActivityDates = new Set(activities.filter(a => classify(a) === "strength").map(a => (a.start || "").slice(0, 10)));
+  const loggedDisciplineDates = new Set(strengthLog.map(l => `${l.date}|${l.discipline}`));
+  const counts = { strength_push: 0, strength_pull: 0, strength_legs: 0 };
+  plannedInRange.forEach(p => {
+    const done = strengthActivityDates.has(p.date) || loggedDisciplineDates.has(`${p.date}|${p.discipline}`);
+    if (done) counts[p.discipline] = (counts[p.discipline] || 0) + 1;
+  });
+  return counts;
+}
+
+function exerciseProgress(strengthLog, start, end) {
+  const inRange = strengthLog.filter(l => l.date >= start && l.date <= end && l.value != null);
+  const byExercise = {};
+  inRange.forEach(l => {
+    (byExercise[l.exercise] = byExercise[l.exercise] || []).push(l);
+  });
+  return Object.keys(byExercise).map(exercise => {
+    const entries = byExercise[exercise].sort((a, b) => (a.date < b.date ? -1 : 1));
+    const first = entries[0], last = entries[entries.length - 1];
+    return {
+      exercise, unit: last.unit || "kg",
+      first: first.value, firstDate: first.date,
+      last: last.value, lastDate: last.date,
+      delta: entries.length > 1 ? Math.round((last.value - first.value) * 10) / 10 : null,
+    };
+  }).sort((a, b) => a.exercise.localeCompare(b.exercise));
+}
+
+function renderExerciseProgress(rows) {
+  const el = document.getElementById("exercise-progress-body");
+  if (!el) return;
+  if (rows.length === 0) { el.innerHTML = `<p class="empty">Ingen loggede løft i perioden endnu -- indtast vægte under "I dag" så dukker udviklingen op her.</p>`; return; }
+  const body = rows.map(r => {
+    const deltaText = r.delta === null ? "–" : `${r.delta > 0 ? "+" : ""}${r.delta} ${r.unit}`;
+    const deltaColor = r.delta === null ? "var(--text-muted)" : r.delta > 0 ? "var(--good)" : (r.delta < 0 ? "var(--critical)" : "var(--text-muted)");
+    return `<tr>
+      <td>${r.exercise}</td>
+      <td class="num">${r.first} ${r.unit}<br><span style="color:var(--text-muted);font-size:11px;">${r.firstDate}</span></td>
+      <td class="num">${r.last} ${r.unit}<br><span style="color:var(--text-muted);font-size:11px;">${r.lastDate}</span></td>
+      <td class="num" style="color:${deltaColor};font-weight:700;">${deltaText}</td>
+    </tr>`;
+  }).join("");
+  el.innerHTML = `<table>
+    <thead><tr><th>Øvelse</th><th class="num">Først</th><th class="num">Seneste</th><th class="num">Ændring</th></tr></thead>
+    <tbody>${body}</tbody></table>`;
+}
+
 function compareTable(rows) {
   let html = `<div class="compare-head"><div></div><div class="actual">Faktisk</div><div class="target">Mål</div></div>`;
   rows.forEach(r => { html += `<div class="compare-row"><div class="metric">${r.label}</div><div class="actual">${r.actual}</div><div class="target">${r.target}</div></div>`; });
@@ -650,22 +708,28 @@ function renderWeekReview(planWeekly, wellness, activities) {
     { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(target.steps_goal) },
   ]);
 }
-function renderMonthReview(planWeekly, wellness, activities) {
+function renderMonthReview(planWeekly, wellness, activities, planDaily, strengthLog) {
   const today = todayISO();
   const start = addDays(today, -29);
   const actual = aggregateActuals(wellness, activities, start, today);
   const weeksInRange = planWeekly.filter(w => w.week_start >= start && w.week_start <= today);
   const targetSum = (key) => weeksInRange.reduce((s, w) => s + (w[key] || 0), 0);
   const targetAvg = (key) => weeksInRange.length ? Math.round(weeksInRange.reduce((s, w) => s + (w[key] || 0), 0) / weeksInRange.length) : null;
+  const strengthCounts = strengthDisciplineCounts(planDaily, activities, strengthLog, start, today);
+
   document.getElementById("review-month-body").innerHTML = compareTable([
     { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(targetSum("run_km_target"), " km") },
     { label: "Løbeture", actual: actual.runSessions, target: targetSum("run_sessions") },
     { label: "Zwift-ture", actual: actual.bikeSessions, target: targetSum("bike_sessions") },
-    { label: "Styrkepas", actual: actual.strengthSessions, target: weeksInRange.reduce((s, w) => s + w.strength_push + w.strength_pull + w.strength_legs, 0) },
+    { label: "Styrke -- Push", actual: strengthCounts.strength_push, target: targetSum("strength_push") },
+    { label: "Styrke -- Pull", actual: strengthCounts.strength_pull, target: targetSum("strength_pull") },
+    { label: "Styrke -- Legs", actual: strengthCounts.strength_legs, target: targetSum("strength_legs") },
     { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(targetAvg("steps_goal")) },
     { label: "Snit søvn", actual: fmt(actual.avgSleep, " t"), target: "–" },
     { label: "Snit hvilepuls", actual: fmt(actual.avgRhr, " bpm"), target: "–" },
   ]);
+
+  renderExerciseProgress(exerciseProgress(strengthLog, start, today));
 }
 
 function barChart(data, key, color, unit, height = 150) {
@@ -693,7 +757,7 @@ function weeklySeries(activities, group, valueFn, weeksBack = 8) {
     const monday = addDays(thisMonday, -7 * i);
     const sunday = addDays(monday, 6);
     const val = activities
-      .filter(a => classify(a.type) === group && (a.start || "").slice(0, 10) >= monday && (a.start || "").slice(0, 10) <= sunday)
+      .filter(a => classify(a) === group && (a.start || "").slice(0, 10) >= monday && (a.start || "").slice(0, 10) <= sunday)
       .reduce((s, a) => s + valueFn(a), 0);
     weeks.push({ label: monday.slice(5), val: Math.round(val * 10) / 10 });
   }
@@ -749,7 +813,7 @@ async function loadDashboard() {
   renderRecentActivities(activities);
   renderWeekTable(planDaily, activities);
   renderWeekReview(planWeekly, wellness, activities);
-  renderMonthReview(planWeekly, wellness, activities);
+  renderMonthReview(planWeekly, wellness, activities, planDaily, strengthLog);
   renderVolumeChart(activities);
   setupTabs();
 }
