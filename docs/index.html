@@ -92,6 +92,19 @@
   .session-title { font-size: 14px; font-weight: 600; }
   .session-desc { font-size: 13px; color: var(--text-secondary); margin-top: 1px; }
   .session-focus { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+  .exercise-list { margin-top: 10px; }
+  .exercise-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--gridline); }
+  .exercise-row:first-child { border-top: none; }
+  .exercise-name { flex: 1; font-size: 13px; }
+  .exercise-input {
+    width: 64px; font-size: 14px; padding: 5px 7px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-raised); color: var(--text-primary); text-align: right;
+  }
+  .exercise-input:focus { outline: 1px solid var(--series-1); }
+  .exercise-unit { font-size: 11px; color: var(--text-muted); width: 34px; }
+  .save-indicator { font-size: 11px; width: 76px; text-align: right; }
+  .save-indicator.ok { color: var(--good); }
+  .save-indicator.err { color: var(--critical); }
   .session-actual { font-size: 12px; color: var(--series-3); margin-top: 2px; }
 
   .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -288,15 +301,75 @@ function paceMinPerKm(distanceKm, durationMin) {
 }
 
 const FOCUS_TEXT = {
-  run_easy: "Fokus: rolig, aerob opbygning. Det skal føles let -- hold samtaletempo hele vejen, det er ikke en dag at presse på.",
-  run_quality: "Fokus: kvalitet frem for mængde. Denne økt vænner krop og ben til at løbe hurtigere end vanligt, kontrolleret.",
-  run_long: "Fokus: ugens vigtigste løbetur. Det er den der bygger den udholdenhed, der bærer dig i mål til halvmaraton -- prioritér denne, hvis du kun har tid til én ting.",
-  bike_endurance: "Fokus: let, jævn kondition på cyklen. Aflaster løbebenene, mens du stadig træner hjerte-kar-systemet.",
-  bike_quality: "Fokus: løfter din kondition og benkraft på cyklen med kontrollerede intervaller -- lidt hårdere end grundturene.",
-  bike_recovery: "Fokus: ren restitution. Meget let, bare for at få blod i benene efter hårde dage.",
-  strength_push: "Fokus: overkrop skub (bryst, skuldre, triceps). Støtter kropsholdning og løbeøkonomi over tid.",
-  strength_pull: "Fokus: overkrop træk (ryg, biceps). Modvirker den skæve belastning fra meget løb og cykling.",
-  strength_legs: "Fokus: benstyrke og stabilitet. Reducerer skadesrisiko og giver ekstra kraft, når det gælder.",
+  run_easy: {
+    base: "Fokus: rolig, aerob opbygning. Det skal føles let -- hold samtaletempo hele vejen.",
+    build1: "Fokus: aktiv restitution mellem de hårdere pas. Stadig roligt -- lad kroppen absorbere den stigende mængde.",
+    build2: "Fokus: hold benene friske til ugens intervaller og langtur. Roligt tempo, ingen tempofristelser.",
+    peak: "Fokus: ren restitution mellem denne fases store belastninger. Meget roligt.",
+    taper: "Fokus: hold kroppen i gang uden at trætte den yderligere. Kort og let.",
+    race: "Fokus: løs op, hold benene skarpe til løbsdagen.",
+  },
+  run_quality: {
+    base: "Fokus: vænne kroppen til lidt hurtigere tempo end vanligt, kontrolleret og uden pres.",
+    build1: "Fokus: tempo-intervaller bygger den fart-udholdenhed du skal bruge senere. Ærlig indsats, ikke max.",
+    build2: "Fokus: race-pace-specifikt arbejde -- her lærer kroppen præcis den fart du skal holde til løbet.",
+    peak: "Fokus: skarphed i benene ved målpace. Kvalitet frem for mængde denne uge.",
+    taper: "Fokus: kort skarphed for at holde kroppen klar -- ikke for at bygge mere form.",
+    race: "Fokus: opvarmning, hold kroppen løs og klar.",
+  },
+  run_long: {
+    base: "Fokus: opbygge grundlæggende udholdenhed. Ugens vigtigste løbetur -- prioritér den, hvis du kun har tid til én ting.",
+    build1: "Fokus: udholdenheden vokser stille og roligt. Hold et jævnt, behageligt tempo hele vejen.",
+    build2: "Fokus: nærmer sig løbsdistancen -- her bygges udholdenheden der bærer dig i mål.",
+    peak: "Fokus: den længste og hårdeste tur i planen. Efter denne begynder nedtrapningen.",
+    taper: "Fokus: hold benene i gang uden at trætte dem -- distancen falder bevidst nu.",
+    race: "Selve løbet -- god fornøjelse! Din krop er klar.",
+  },
+  bike_endurance: {
+    base: "Fokus: byg grundkondition på cyklen uden at belaste løbebenene.",
+    default: "Fokus: supplerende kondition i jævnt tempo -- aflaster benene fra løbetræningen.",
+    taper: "Fokus: hold benene i gang på let belastning.",
+  },
+  bike_quality: {
+    default: "Fokus: løfter din kondition og benkraft med kontrollerede intervaller -- lidt hårdere end grundturene.",
+    taper: "Fokus: kort skarphed, ikke mere opbygning.",
+  },
+  bike_recovery: {
+    default: "Fokus: ren restitution. Meget let, bare for at få blod i benene efter hårde dage.",
+  },
+  strength_push: {
+    default: "Fokus: overkrop skub (bryst, skuldre, triceps). Støtter kropsholdning og løbeøkonomi over tid.",
+  },
+  strength_pull: {
+    default: "Fokus: overkrop træk (ryg, biceps). Modvirker den skæve belastning fra meget løb og cykling.",
+  },
+  strength_legs: {
+    default: "Fokus: benstyrke og stabilitet. Reducerer skadesrisiko og giver ekstra kraft, når det gælder.",
+  },
+};
+function focusTextFor(discipline, phase) {
+  const entry = FOCUS_TEXT[discipline];
+  if (!entry) return "";
+  return entry[phase] || entry.default || entry.base || "";
+}
+
+const STRENGTH_EXERCISES = {
+  strength_push: [
+    { name: "Bænkpres", unit: "kg" },
+    { name: "Cable crossover", unit: "kg" },
+    { name: "Triceps extension (row)", unit: "kg" },
+    { name: "Triceps extension (bar)", unit: "kg" },
+  ],
+  strength_pull: [
+    { name: "Pull-up", unit: "reps" },
+    { name: "Rows", unit: "kg" },
+    { name: "Military rows", unit: "kg" },
+    { name: "Hammer curls", unit: "kg" },
+  ],
+  strength_legs: [
+    { name: "Bulgarian split squats", unit: "kg" },
+    { name: "Calf raises", unit: "kg" },
+  ],
 };
 
 function tile(value, unit, label) {
@@ -306,7 +379,7 @@ function tile(value, unit, label) {
   return div;
 }
 
-function sessionRow(planRow, actuals) {
+function sessionRow(planRow, actuals, phase) {
   const group = disciplineGroup(planRow.discipline);
   const matched = actuals.filter(a => a.dateKey === planRow.date && classify(a.type) === group);
   const done = matched.length > 0;
@@ -315,6 +388,7 @@ function sessionRow(planRow, actuals) {
         ? matched.map(a => a.distance_km ? `${fmt(a.distance_km, " km")}` : (a.duration_min ? `${fmt(a.duration_min, " min")}` : "gennemført")).join(", ")
         : "gennemført")
     : null;
+  const focus = focusTextFor(planRow.discipline, phase);
   const row = document.createElement("div");
   row.className = "session-row";
   row.innerHTML = `
@@ -322,17 +396,88 @@ function sessionRow(planRow, actuals) {
     <div class="session-body">
       <div class="session-title">${planRow.title || ""}</div>
       <div class="session-desc">${planRow.prescription || ""}</div>
-      ${FOCUS_TEXT[planRow.discipline] ? `<div class="session-focus">${FOCUS_TEXT[planRow.discipline]}</div>` : ""}
+      ${focus ? `<div class="session-focus">${focus}</div>` : ""}
       ${actualText ? `<div class="session-actual">Faktisk: ${actualText}</div>` : ""}
     </div>`;
   return row;
 }
 
-function renderHero(planWeekly) {
+async function saveStrengthValue(date, discipline, exercise, unit, value) {
+  const base = SUPABASE_URL.replace(/\/$/, "");
+  try {
+    const res = await fetch(`${base}/rest/v1/strength_log?on_conflict=date,exercise`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify([{ date, discipline, exercise, value, unit }]),
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+function strengthSessionRow(planRow, actuals, phase, strengthLog) {
+  const matched = actuals.filter(a => a.dateKey === planRow.date && classify(a.type) === "strength");
+  const done = matched.length > 0;
+  const focus = focusTextFor(planRow.discipline, phase);
+  const exercises = STRENGTH_EXERCISES[planRow.discipline] || [];
+
+  const row = document.createElement("div");
+  row.className = "session-row";
+  const rowsHtml = exercises.map(ex => {
+    const logged = strengthLog.find(l => l.date === planRow.date && l.exercise === ex.name);
+    const val = logged && logged.value != null ? logged.value : "";
+    return `
+      <div class="exercise-row">
+        <span class="exercise-name">${ex.name}</span>
+        <input type="number" step="0.5" inputmode="decimal" class="exercise-input"
+          data-date="${planRow.date}" data-discipline="${planRow.discipline}" data-exercise="${ex.name}" data-unit="${ex.unit}"
+          value="${val}" placeholder="${ex.unit === "reps" ? "antal" : "kg"}">
+        <span class="exercise-unit">${ex.unit}</span>
+        <span class="save-indicator" data-for="${ex.name}"></span>
+      </div>`;
+  }).join("");
+
+  row.innerHTML = `
+    <div class="check ${done ? "done" : "todo"}">${done ? "✓" : ""}</div>
+    <div class="session-body">
+      <div class="session-title">${planRow.title || ""}</div>
+      <div class="session-desc">${planRow.prescription || ""}</div>
+      ${focus ? `<div class="session-focus">${focus}</div>` : ""}
+      <div class="exercise-list">${rowsHtml}</div>
+    </div>`;
+
+  row.querySelectorAll(".exercise-input").forEach(input => {
+    input.addEventListener("change", async () => {
+      const indicator = row.querySelector(`.save-indicator[data-for="${CSS.escape(input.dataset.exercise)}"]`);
+      const value = input.value === "" ? null : parseFloat(input.value);
+      if (indicator) indicator.textContent = "Gemmer…";
+      const ok = await saveStrengthValue(input.dataset.date, input.dataset.discipline, input.dataset.exercise, input.dataset.unit, value);
+      if (indicator) {
+        indicator.textContent = ok ? "Gemt ✓" : "Kunne ikke gemme";
+        indicator.className = "save-indicator " + (ok ? "ok" : "err");
+        setTimeout(() => { indicator.textContent = ""; }, 2000);
+      }
+    });
+  });
+
+  return row;
+}
+
+function currentWeekRow(planWeekly) {
   const today = todayISO();
-  const daysLeft = Math.max(0, daysBetween(today, RACE_DAY));
+  return planWeekly.find(w => today >= w.week_start && today < addDays(w.week_start, 7));
+}
+
+function renderHero(planWeekly) {
+  const daysLeft = Math.max(0, daysBetween(todayISO(), RACE_DAY));
   document.getElementById("hero-days").textContent = daysLeft;
-  const thisWeek = planWeekly.find(w => today >= w.week_start && today < addDays(w.week_start, 7));
+  const thisWeek = currentWeekRow(planWeekly);
   if (thisWeek) {
     document.getElementById("hero-sub").textContent =
       `Uge ${thisWeek.week_number} af 44 · ${PHASE_LABEL[thisWeek.phase] || thisWeek.phase}${thisWeek.cutback ? " · lettere uge" : ""}`;
@@ -368,16 +513,23 @@ function renderStatus(wellness) {
     </div>`;
 }
 
-function renderToday(planDaily, wellness, activities) {
+function renderToday(planDaily, wellness, activities, planWeekly, strengthLog) {
   const today = todayISO();
   const todaysPlan = planDaily.filter(p => p.date === today);
   const container = document.getElementById("today-training");
   container.innerHTML = "";
   const actualsWithKey = activities.map(a => ({ ...a, dateKey: (a.start || "").slice(0, 10) }));
+  const thisWeek = currentWeekRow(planWeekly);
+  const phase = thisWeek ? thisWeek.phase : "base";
   if (todaysPlan.length === 0) {
     container.innerHTML = `<p class="empty">Ingen planlagte økter i dag.</p>`;
   } else {
-    todaysPlan.forEach(p => container.appendChild(sessionRow(p, actualsWithKey)));
+    todaysPlan.forEach(p => {
+      const row = disciplineGroup(p.discipline) === "strength"
+        ? strengthSessionRow(p, actualsWithKey, phase, strengthLog)
+        : sessionRow(p, actualsWithKey, phase);
+      container.appendChild(row);
+    });
   }
 
   const w = wellness.find(w => w.date === today) || wellness[wellness.length - 1];
@@ -571,18 +723,21 @@ function setupTabs() {
 async function loadDashboard() {
   const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
   const base = SUPABASE_URL.replace(/\/$/, "");
-  let wellness = [], activities = [], planWeekly = [], planDaily = [];
+  let wellness = [], activities = [], planWeekly = [], planDaily = [], strengthLog = [];
   try {
-    const [wRes, aRes, pwRes, pdRes] = await Promise.all([
+    const [wRes, aRes, pwRes, pdRes, slRes] = await Promise.all([
       fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.asc&limit=90`, { headers }),
       fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=200`, { headers }),
       fetch(`${base}/rest/v1/plan_weekly?select=*&order=week_start.asc&limit=52`, { headers }),
       fetch(`${base}/rest/v1/plan_daily?select=*&order=date.asc&limit=100`, { headers }),
+      fetch(`${base}/rest/v1/strength_log?select=*&order=date.desc&limit=200`, { headers }),
     ]);
     wellness = await wRes.json();
     activities = await aRes.json();
     planWeekly = await pwRes.json();
     planDaily = await pdRes.json();
+    strengthLog = await slRes.json();
+    if (!Array.isArray(strengthLog)) strengthLog = []; // strength_log table may not exist yet
   } catch (e) {
     document.getElementById("hero-sub").textContent = "Kunne ikke hente data. Tjek Supabase-opsætningen.";
     return;
@@ -590,7 +745,7 @@ async function loadDashboard() {
 
   renderHero(planWeekly);
   renderStatus(wellness);
-  renderToday(planDaily, wellness, activities);
+  renderToday(planDaily, wellness, activities, planWeekly, strengthLog);
   renderRecentActivities(activities);
   renderWeekTable(planDaily, activities);
   renderWeekReview(planWeekly, wellness, activities);

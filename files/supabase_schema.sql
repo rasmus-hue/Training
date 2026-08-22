@@ -81,3 +81,30 @@ create policy "public read plan_weekly" on plan_weekly
 
 create policy "public read plan_daily" on plan_daily
   for select using (true);
+
+-- Strength log: what you actually lifted, entered from the dashboard itself.
+-- Unlike the tables above, the dashboard needs to WRITE here (not just read),
+-- so the anon key gets insert/update rights on this one table only -- anyone
+-- with the page link and passphrase can log a lift, same trust level as the
+-- rest of the site. Read access stays public like everything else.
+
+create table if not exists strength_log (
+  date date not null,
+  exercise text not null,
+  discipline text,
+  value real,
+  unit text,
+  updated_at timestamptz default now(),
+  primary key (date, exercise)
+);
+
+alter table strength_log enable row level security;
+
+create policy "public read strength_log" on strength_log
+  for select using (true);
+
+create policy "public insert strength_log" on strength_log
+  for insert with check (true);
+
+create policy "public update strength_log" on strength_log
+  for update using (true) with check (true);
