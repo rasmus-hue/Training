@@ -38,3 +38,46 @@ create policy "public read wellness" on garmin_wellness
 
 create policy "public read activities" on garmin_activities
   for select using (true);
+
+-- Training plan: the macro (weekly) targets and the day-by-day sessions.
+-- Populated/refreshed by files/generate_plan.py, read by the dashboard.
+
+create table if not exists plan_weekly (
+  week_start date primary key,
+  week_number integer,
+  phase text,
+  cutback boolean,
+  run_sessions integer,
+  run_km_target real,
+  long_run_km real,
+  key_session text,
+  easy_pace text,
+  bike_sessions integer,
+  bike_minutes_target integer,
+  strength_push integer,
+  strength_pull integer,
+  strength_legs integer,
+  steps_goal integer,
+  notes text
+);
+
+create table if not exists plan_daily (
+  date date not null,
+  discipline text not null,
+  title text,
+  prescription text,
+  target_distance_km real,
+  target_duration_min real,
+  completed boolean default false,
+  notes text,
+  primary key (date, discipline)
+);
+
+alter table plan_weekly enable row level security;
+alter table plan_daily enable row level security;
+
+create policy "public read plan_weekly" on plan_weekly
+  for select using (true);
+
+create policy "public read plan_daily" on plan_daily
+  for select using (true);
