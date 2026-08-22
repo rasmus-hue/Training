@@ -22,8 +22,8 @@ jobs:
       - name: Sync Garmin data
         env:
           GARMIN_TOKEN_B64: ${{ secrets.GARMIN_TOKEN_B64 }}
-          GARMIN_INGEST_URL: ${{ secrets.GARMIN_INGEST_URL }}
-          GARMIN_INGEST_SECRET: ${{ secrets.SESSION_LOG_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           python files/sync_garmin.py --days 3 --sink supabase
           # Files-only mode (no database, no dashboard): comment the line

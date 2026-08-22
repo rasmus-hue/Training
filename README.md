@@ -154,28 +154,60 @@ morning. (Sleep and HRV only fill in on nights you actually wear the watch to be
 
 ---
 
-## Path A: GitHub Actions (cloud, automatic)
+## Path A: GitHub Actions + Supabase + a phone dashboard (cloud, automatic)
 
-1. Put the script in a GitHub repo of your own (this one already has it under
-   `files/`). Copy `files/garmin-sync.yml` into a `.github/workflows/` folder in
-   that repo.
+This is the "check it from my phone every morning" setup. Three pieces:
+Supabase (free database, doubles as the ingest API — no backend code to write),
+GitHub Actions (runs the sync every morning, no computer needs to stay on), and
+a small dashboard page hosted on GitHub Pages (fetches live from Supabase each
+time you open it, so it's always current with zero deploy step after setup).
 
-2. In the repo: Settings > Secrets and variables > Actions, add:
+**Heads up on privacy:** the dashboard page is *unlisted*, not password-secure
+in a strong sense — it's a static page gated by a passphrase check that lives in
+the page's own source, which is enough to stop a casual visitor but not a
+determined one. Good enough for "nobody stumbles onto my recovery data," not a
+substitute for real auth. Say so if you want something stronger.
+
+1. **Create a free Supabase project** at [supabase.com](https://supabase.com).
+   Once it's created, open **SQL Editor -> New query**, paste in the contents of
+   [`files/supabase_schema.sql`](files/supabase_schema.sql), and run it. That
+   creates the two tables the sync script writes to.
+
+2. Open **Project Settings -> API** and note down two values:
+   - **Project URL**
+   - **anon public** key (safe to publish — it can only *read*, see the SQL
+     policies) — this goes in the dashboard page
+   - **service_role** key (**secret** — can write; only goes in the GitHub
+     Actions secret below, never in the dashboard page)
+
+3. In your GitHub repo: **Settings > Secrets and variables > Actions**, add:
 
    | Secret | Value |
    |--------|-------|
    | `GARMIN_TOKEN_B64` | the contents of `garmin-ci-token.txt` from `--export-ci-token` |
-   | `GARMIN_INGEST_URL` | your ingest endpoint, if you use one |
-   | `SESSION_LOG_SECRET` | the shared secret your endpoint checks |
+   | `SUPABASE_URL` | your Supabase Project URL |
+   | `SUPABASE_SERVICE_KEY` | your Supabase **service_role** key |
 
-   If you only want the files mode and no database, change the workflow's last
-   step to `--sink files` and skip the URL and secret.
+   Copy `files/garmin-sync.yml` into a `.github/workflows/` folder in the repo if
+   it isn't already there. Open the Actions tab and click **Run workflow** once
+   to confirm a green run. After that it runs every morning on its own.
 
-3. Open the Actions tab and click Run workflow once to confirm a green run. After
-   that it runs every morning on its own.
+   If you'd rather skip the database and dashboard entirely, change the
+   workflow's last step to `--sink files` instead — see Path B.
 
-You only touch it again if your password changes or the yearly token expires; then
-re-run `--login` and update the `GARMIN_TOKEN_B64` secret.
+4. **Set up the dashboard.** Open `docs/index.html` and fill in the three
+   placeholders near the top of the `<script>` block: `SUPABASE_URL`,
+   `SUPABASE_ANON_KEY` (the **anon public** key, not service_role), and
+   `PASSPHRASE_SHA256` — a SHA-256 hash of whatever passphrase you want to gate
+   the page with (ask Claude to generate the hash for you, or use the snippet
+   in the file's comments). Commit and push.
+
+5. Turn on GitHub Pages: **Settings > Pages**, set source to this branch and
+   the `/docs` folder. Give it a minute, then open the URL it gives you on your
+   phone and enter your passphrase.
+
+You only touch any of this again if your password changes or the yearly token
+expires; then re-run `--login` and update the `GARMIN_TOKEN_B64` secret.
 
 ---
 
@@ -201,17 +233,21 @@ Your machine has to be on and awake at the scheduled time.
 
 ---
 
-## Sending to a database instead of files
+## Sending to Supabase instead of files
 
-If you have your own endpoint that accepts the data, use `--sink supabase`:
+This is what Path A uses under the hood. Once you've created a Supabase project
+and run `files/supabase_schema.sql` (see Path A, steps 1-2), you can run it
+locally too:
 
 ```bash
-export GARMIN_INGEST_URL="https://yoursite.com/api/garmin/ingest"
-export GARMIN_INGEST_SECRET="your-shared-secret"
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_SERVICE_KEY="your-service_role-key"
 python sync_garmin.py --days 3 --sink supabase
 ```
 
-It POSTs `{activities, wellness}` with an `Authorization: Bearer` header.
+It upserts rows straight into the `garmin_wellness` and `garmin_activities`
+tables via Supabase's REST API, keyed by date / activity id, so re-running it
+just fills in gaps rather than duplicating rows.
 
 ---
 

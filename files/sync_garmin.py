@@ -369,24 +369,43 @@ def sink_files(out_dir: Path, activities: list[dict], wellness: list[dict]) -> N
     print(f"Wrote {len(wellness)} daily note(s) and {len(activities)} activity note(s) to {out_dir}/")
 
 
-def sink_supabase(activities: list[dict], wellness: list[dict]) -> None:
-    url = os.environ.get("GARMIN_INGEST_URL")
-    secret = os.environ.get("GARMIN_INGEST_SECRET")
-    if not url or not secret:
-        fail("Set GARMIN_INGEST_URL and GARMIN_INGEST_SECRET to use --sink supabase.")
-
-    payload = json.dumps({"activities": activities, "wellness": wellness}).encode("utf-8")
+def _supabase_upsert(base_url: str, key: str, table: str, conflict_col: str, rows: list[dict]) -> None:
+    if not rows:
+        return
+    endpoint = f"{base_url.rstrip('/')}/rest/v1/{table}?on_conflict={conflict_col}"
     request = urllib.request.Request(
-        url,
-        data=payload,
+        endpoint,
+        data=json.dumps(rows).encode("utf-8"),
         method="POST",
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {secret}"},
+        headers={
+            "Content-Type": "application/json",
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
+        },
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            print(f"Sent {len(activities)} activities and {len(wellness)} wellness day(s) -> HTTP {response.status}")
+        with urllib.request.urlopen(request, timeout=30):
+            pass
+    except urllib.error.HTTPError as exc:
+        fail(f"Supabase rejected the {table} upsert (HTTP {exc.code}): {exc.read().decode('utf-8', 'replace')}")
     except urllib.error.URLError as exc:
-        fail(f"Could not reach the ingest endpoint: {exc}")
+        fail(f"Could not reach Supabase: {exc}")
+
+
+def sink_supabase(activities: list[dict], wellness: list[dict]) -> None:
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_KEY")
+    if not url or not key:
+        fail(
+            "Set SUPABASE_URL and SUPABASE_SERVICE_KEY to use --sink supabase.\n"
+            "(SUPABASE_SERVICE_KEY is the service_role key -- keep it secret, never put it in the dashboard.)"
+        )
+
+    activities_with_id = [a for a in activities if a.get("id") is not None]
+    _supabase_upsert(url, key, "garmin_wellness", "date", wellness)
+    _supabase_upsert(url, key, "garmin_activities", "id", activities_with_id)
+    print(f"Sent {len(activities_with_id)} activities and {len(wellness)} wellness day(s) to Supabase.")
 
 
 def dry_run_report(activities: list[dict], wellness: list[dict]) -> None:

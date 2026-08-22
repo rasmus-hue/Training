@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Garmin recovery</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-page:   #f9f9f7;
+    --surface-card:   #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* resting HR */
+    --series-3:       #1baf7a; /* sleep */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-page:   #0d0d0d;
+      --surface-card:   #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-3:       #199e70;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }
+  .card {
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-secondary); margin: 0 0 12px; font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  @media (min-width: 480px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
+  .tile { padding: 10px 4px; }
+  .tile .value { font-size: 22px; font-weight: 600; font-variant-numeric: proportional-nums; }
+  .tile .unit { font-size: 12px; color: var(--text-muted); margin-left: 2px; }
+  .tile .label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  svg text { fill: var(--text-muted); font-size: 10px; }
+  .chart-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .chart-dot { r: 2.5; }
+  .chart-grid { stroke: var(--gridline); stroke-width: 1; }
+  .chart-baseline { stroke: var(--baseline); stroke-width: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--gridline); }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty, .status { color: var(--text-secondary); font-size: 14px; padding: 8px 0; }
+  .gate { max-width: 320px; margin: 20vh auto; text-align: center; }
+  .gate input { font-size: 16px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-card); color: var(--text-primary); width: 100%; margin: 12px 0; }
+  .gate button { font-size: 14px; padding: 10px 16px; border-radius: 8px; border: none;
+    background: var(--series-1); color: white; cursor: pointer; }
+  .gate .error { color: #e34948; font-size: 13px; min-height: 18px; }
+  #dashboard { display: none; }
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <h1>Garmin recovery</h1>
+  <p class="subtitle">Beskyttet side &mdash; indtast adgangskode</p>
+  <input id="gate-input" type="password" autocomplete="off" placeholder="Adgangskode">
+  <div><button id="gate-submit">Lås op</button></div>
+  <div id="gate-error" class="error"></div>
+</div>
+
+<div id="dashboard" class="wrap">
+  <h1>Garmin recovery</h1>
+  <p class="subtitle" id="last-updated">Henter data&hellip;</p>
+
+  <div class="card">
+    <h2>I dag</h2>
+    <div id="today-tiles" class="tiles"></div>
+  </div>
+
+  <div class="card">
+    <h2>Hvilepuls, sidste 14 dage</h2>
+    <div id="chart-rhr"></div>
+  </div>
+
+  <div class="card">
+    <h2>S&oslash;vn (timer), sidste 14 dage</h2>
+    <div id="chart-sleep"></div>
+  </div>
+
+  <div class="card">
+    <h2>Seneste aktiviteter</h2>
+    <div id="activities"></div>
+  </div>
+</div>
+
+<script>
+// ---- Fill these in after you create your Supabase project ----
+// Project settings -> API -> Project URL / anon public key.
+// The anon key is safe to publish here: the database only allows it to
+// read (see files/supabase_schema.sql), never write or delete.
+const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL_HERE";
+const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY_HERE";
+
+// SHA-256 of the passphrase that unlocks this page. Ask Claude to
+// generate this for you, or run in a browser console:
+//   crypto.subtle.digest("SHA-256", new TextEncoder().encode("your-passphrase"))
+//     .then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("")))
+const PASSPHRASE_SHA256 = "PASTE_YOUR_PASSPHRASE_HASH_HERE";
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function checkGate() {
+  if (sessionStorage.getItem("garmin-gate-ok") === "1") return true;
+  const input = document.getElementById("gate-input");
+  const submit = document.getElementById("gate-submit");
+  return new Promise(resolve => {
+    const tryUnlock = async () => {
+      const hash = await sha256Hex(input.value);
+      if (hash === PASSPHRASE_SHA256) {
+        sessionStorage.setItem("garmin-gate-ok", "1");
+        resolve(true);
+      } else {
+        document.getElementById("gate-error").textContent = "Forkert adgangskode.";
+      }
+    };
+    submit.addEventListener("click", tryUnlock);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
+  });
+}
+
+function fmt(value, suffix) {
+  return (value === null || value === undefined) ? "–" : `${value}${suffix || ""}`;
+}
+
+function tile(value, unit, label) {
+  const div = document.createElement("div");
+  div.className = "tile";
+  div.innerHTML = `<div class="value">${value}<span class="unit">${unit}</span></div><div class="label">${label}</div>`;
+  return div;
+}
+
+function lineChart(rows, key, color, height = 120) {
+  const width = 640;
+  const padL = 32, padR = 8, padT = 10, padB = 20;
+  const values = rows.map(r => r[key]).filter(v => v !== null && v !== undefined);
+  if (values.length === 0) return `<p class="empty">Ingen data endnu.</p>`;
+
+  const min = Math.min(...values), max = Math.max(...values);
+  const lo = min === max ? min - 1 : min - (max - min) * 0.1;
+  const hi = min === max ? max + 1 : max + (max - min) * 0.1;
+  const n = rows.length;
+  const x = i => padL + (i / Math.max(n - 1, 1)) * (width - padL - padR);
+  const y = v => padT + (1 - (v - lo) / (hi - lo)) * (height - padT - padB);
+
+  let path = "", dots = "";
+  let started = false;
+  rows.forEach((r, i) => {
+    const v = r[key];
+    if (v === null || v === undefined) { started = false; return; }
+    path += (started ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1) + " ";
+    started = true;
+    dots += `<circle class="chart-dot" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" fill="${color}"><title>${r.date}: ${v}</title></circle>`;
+  });
+
+  const gridY = [lo + (hi - lo) * 0.25, lo + (hi - lo) * 0.75];
+  const gridLines = gridY.map(v => `<line class="chart-grid" x1="${padL}" x2="${width - padR}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>`).join("");
+  const firstLabel = rows[0] ? rows[0].date.slice(5) : "";
+  const lastLabel = rows[n - 1] ? rows[n - 1].date.slice(5) : "";
+
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">
+    ${gridLines}
+    <line class="chart-baseline" x1="${padL}" x2="${width - padR}" y1="${(height - padB).toFixed(1)}" y2="${(height - padB).toFixed(1)}"/>
+    <path class="chart-line" d="${path}" stroke="${color}"/>
+    ${dots}
+    <text x="${padL}" y="${height - 4}">${firstLabel}</text>
+    <text x="${width - padR}" y="${height - 4}" text-anchor="end">${lastLabel}</text>
+  </svg>`;
+}
+
+async function loadDashboard() {
+  const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+  const base = SUPABASE_URL.replace(/\/$/, "");
+
+  let wellness = [], activities = [];
+  try {
+    const [wRes, aRes] = await Promise.all([
+      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.asc&limit=14`, { headers }),
+      fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=10`, { headers }),
+    ]);
+    wellness = await wRes.json();
+    activities = await aRes.json();
+  } catch (e) {
+    document.getElementById("last-updated").textContent = "Kunne ikke hente data. Tjek Supabase-opsætningen.";
+    return;
+  }
+
+  const today = wellness[wellness.length - 1];
+  document.getElementById("last-updated").textContent = today
+    ? `Sidste data: ${today.date}`
+    : "Ingen data endnu — kør sync-scriptet først.";
+
+  const tiles = document.getElementById("today-tiles");
+  if (today) {
+    tiles.append(
+      tile(fmt(today.resting_hr), " bpm", "Hvilepuls"),
+      tile(fmt(today.hrv), " ms", "HRV"),
+      tile(fmt(today.sleep_hours), " t", "Søvn"),
+      tile(fmt(today.training_readiness), "", "Readiness"),
+      tile(fmt(today.body_battery_low) + " → " + fmt(today.body_battery_high), "", "Body battery"),
+      tile(fmt(today.stress_avg), "", "Stress"),
+      tile(fmt(today.steps), "", "Skridt"),
+    );
+  } else {
+    tiles.append(Object.assign(document.createElement("p"), { className: "empty", textContent: "Ingen data endnu." }));
+  }
+
+  document.getElementById("chart-rhr").innerHTML = lineChart(wellness, "resting_hr", getComputedStyle(document.documentElement).getPropertyValue("--series-1").trim());
+  document.getElementById("chart-sleep").innerHTML = lineChart(wellness, "sleep_hours", getComputedStyle(document.documentElement).getPropertyValue("--series-3").trim());
+
+  const activitiesDiv = document.getElementById("activities");
+  if (activities.length === 0) {
+    activitiesDiv.innerHTML = `<p class="empty">Ingen aktiviteter endnu.</p>`;
+  } else {
+    const rows = activities.map(a => `
+      <tr>
+        <td>${a.name || "–"}<br><span style="color:var(--text-muted); font-size:12px;">${(a.start || "").slice(0, 10)}</span></td>
+        <td class="num">${fmt(a.duration_min, " min")}</td>
+        <td class="num">${fmt(a.distance_km, " km")}</td>
+        <td class="num">${fmt(a.avg_hr, " bpm")}</td>
+      </tr>`).join("");
+    activitiesDiv.innerHTML = `<table>
+      <thead><tr><th>Aktivitet</th><th>Varighed</th><th>Distance</th><th>Puls</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+}
+
+(async () => {
+  await checkGate();
+  document.getElementById("gate").style.display = "none";
+  document.getElementById("dashboard").style.display = "block";
+  loadDashboard();
+})();
+</script>
+</body>
+</html>
