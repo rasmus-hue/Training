@@ -167,8 +167,71 @@ def build_weekly_rows():
     return rows
 
 
+def classify(type_str: str) -> str:
+    t = (type_str or "").lower()
+    if "run" in t:
+        return "run"
+    if "cycl" in t or "bik" in t:
+        return "bike"
+    if "strength" in t or "weight" in t:
+        return "strength"
+    return "other"
+
+
+def supabase_get(table: str, select: str, filters: str = "") -> list[dict]:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return []
+    url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
+    if filters:
+        url += f"&{filters}"
+    req = urllib.request.Request(
+        url, headers={"apikey": SUPABASE_SERVICE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except Exception as exc:  # noqa: BLE001
+        print(f"Could not fetch {table} for adherence check: {exc}", file=sys.stderr)
+        return []
+
+
+def recent_adherence(lookback_days: int = 7) -> tuple[float, int]:
+    """How much of the last week's plan actually happened, judged by whether a
+    same-day, same-discipline Garmin activity exists. Returns (fraction, n_planned)."""
+    since = (TODAY - timedelta(days=lookback_days)).isoformat()
+    planned = supabase_get("plan_daily", "date,discipline", f"date=gte.{since}&date=lt.{TODAY.isoformat()}")
+    if not planned:
+        return 1.0, 0
+    activities = supabase_get("garmin_activities", "start,type", f"start=gte.{since}")
+    done_by_group = {}
+    for a in activities:
+        g = classify(a.get("type"))
+        done_by_group.setdefault(g, set()).add((a.get("start") or "")[:10])
+    hits = sum(1 for p in planned if p["date"] in done_by_group.get(p["discipline"].split("_")[0], set()))
+    return hits / len(planned), len(planned)
+
+
+def adjust_factor(adherence: float) -> float:
+    """Pull upcoming run/bike volume back when recent sessions were mostly missed,
+    instead of blindly progressing the fixed macro formula regardless of what
+    actually happened."""
+    if adherence >= 0.85:
+        return 1.0
+    if adherence >= 0.6:
+        return 0.9
+    if adherence >= 0.4:
+        return 0.75
+    return 0.6
+
+
 def build_daily_rows(days: int = 7):
     weekly_by_monday = {r["week_start"]: r for r in build_weekly_rows()}
+    adherence, n_planned = recent_adherence()
+    factor = adjust_factor(adherence)
+    adjust_note = ""
+    if n_planned and factor < 1.0:
+        adjust_note = f" (justeret ned {round((1 - factor) * 100)}% -- {round(adherence * 100)}% af sidste uges pas blev gennemført)"
+
     rows = []
     for i in range(days):
         d = TODAY + timedelta(days=i)
@@ -179,24 +242,24 @@ def build_daily_rows(days: int = 7):
         phase = week["phase"]
         for kind in WEEKDAY_TEMPLATE[d.weekday()]:
             if kind == "run_long":
-                title, desc = "Langtur", f"{week['long_run_km']} km i {week['easy_pace']}"
-                distance = week["long_run_km"]
+                distance = round(week["long_run_km"] * factor, 1)
+                title, desc = "Langtur", f"{distance} km i {week['easy_pace']}{adjust_note}"
                 duration = None
             elif kind == "run_easy":
-                title, desc = "Rolig løbetur", f"~{easy_run_km(week['long_run_km'], phase)} km i {week['easy_pace']}"
-                distance = easy_run_km(week["long_run_km"], phase)
+                distance = round(easy_run_km(week["long_run_km"], phase) * factor, 1)
+                title, desc = "Rolig løbetur", f"~{distance} km i {week['easy_pace']}{adjust_note}"
                 duration = None
             elif kind == "run_quality":
-                title, desc = week["key_session"], week["notes"]
-                distance = quality_run_km(week["long_run_km"], phase)
+                distance = round(quality_run_km(week["long_run_km"], phase) * factor, 1)
+                title, desc = week["key_session"], week["notes"] + adjust_note
                 duration = None
             elif kind in ("bike_endurance", "bike_quality", "bike_recovery"):
                 title = {"bike_endurance": "Zwift grundtur", "bike_quality": "Zwift intervaller",
                          "bike_recovery": "Zwift restitution"}[kind]
-                desc = bike_desc(kind, phase)
+                desc = bike_desc(kind, phase) + adjust_note
                 distance = None
-                duration = bike_minutes(phase, kind)
-            else:  # strength
+                duration = round(bike_minutes(phase, kind) * factor)
+            else:  # strength -- not volume-adjusted, consistency matters more here
                 title = {"strength_push": "Styrke: Push", "strength_pull": "Styrke: Pull",
                          "strength_legs": "Styrke: Legs"}[kind]
                 desc = strength_desc(kind)
