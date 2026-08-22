@@ -144,9 +144,9 @@ def bike_desc(kind: str, phase: str) -> str:
 
 def strength_desc(kind: str) -> str:
     return {
-        "strength_push": "Push: bænkpres/skråbænk, skulderpres, dips/triceps, 3-4 sæt x 6-12 reps",
-        "strength_pull": "Pull: markløft/roning, pull-ups/latpulldown, biceps, 3-4 sæt x 6-12 reps",
-        "strength_legs": "Legs: squat, rumænske markløft, udfald, cordbeen, core, 3-4 sæt x 6-12 reps",
+        "strength_push": "Push: bænkpres, cable crossover, triceps extension (row), triceps extension (bar). 3-4 sæt x 6-12 reps.",
+        "strength_pull": "Pull: pull-up, rows, military rows, hammer curls. 3-4 sæt x 6-12 reps (pull-up: så mange reps du kan).",
+        "strength_legs": "Legs: bulgarian split squats, calf raises. 3-4 sæt x 6-12 reps.",
     }[kind]
 
 
