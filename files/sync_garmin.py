@@ -206,6 +206,13 @@ def daterange(end: date, days: int) -> list[date]:
     return [end - timedelta(days=i) for i in range(days - 1, -1, -1)]
 
 
+def as_int(value) -> "int | None":
+    """Garmin's API mixes int/float for whole-number fields (e.g. 153.0), but
+    the database columns are integer -- Postgres rejects "153.0" as input for
+    an integer column even though it's numerically whole. Normalize here."""
+    return None if value is None else int(round(value))
+
+
 def fetch_wellness(client: Garmin, day: date) -> dict:
     cdate = day.isoformat()
     out: dict = {"date": cdate}
@@ -214,11 +221,11 @@ def fetch_wellness(client: Garmin, day: date) -> dict:
         summary = client.get_user_summary(cdate) or {}
     except Exception:  # noqa: BLE001
         summary = {}
-    out["resting_hr"] = summary.get("restingHeartRate")
-    out["steps"] = summary.get("totalSteps")
-    out["stress_avg"] = summary.get("averageStressLevel")
-    out["body_battery_low"] = summary.get("bodyBatteryLowestValue")
-    out["body_battery_high"] = summary.get("bodyBatteryHighestValue")
+    out["resting_hr"] = as_int(summary.get("restingHeartRate"))
+    out["steps"] = as_int(summary.get("totalSteps"))
+    out["stress_avg"] = as_int(summary.get("averageStressLevel"))
+    out["body_battery_low"] = as_int(summary.get("bodyBatteryLowestValue"))
+    out["body_battery_high"] = as_int(summary.get("bodyBatteryHighestValue"))
 
     try:
         sleep = client.get_sleep_data(cdate) or {}
@@ -226,7 +233,7 @@ def fetch_wellness(client: Garmin, day: date) -> dict:
         seconds = dto.get("sleepTimeSeconds")
         out["sleep_hours"] = round(seconds / 3600, 1) if seconds else None
         overall = (dto.get("sleepScores") or {}).get("overall") or {}
-        out["sleep_score"] = overall.get("value")
+        out["sleep_score"] = as_int(overall.get("value"))
     except Exception:  # noqa: BLE001
         out["sleep_hours"] = None
         out["sleep_score"] = None
@@ -241,9 +248,9 @@ def fetch_wellness(client: Garmin, day: date) -> dict:
     try:
         readiness = client.get_training_readiness(cdate)
         if isinstance(readiness, list) and readiness:
-            out["training_readiness"] = readiness[0].get("score")
+            out["training_readiness"] = as_int(readiness[0].get("score"))
         elif isinstance(readiness, dict):
-            out["training_readiness"] = readiness.get("score")
+            out["training_readiness"] = as_int(readiness.get("score"))
         else:
             out["training_readiness"] = None
     except Exception:  # noqa: BLE001
@@ -270,8 +277,8 @@ def fetch_activities(client: Garmin, start: date, end: date) -> list[dict]:
                 "start": a.get("startTimeLocal"),
                 "duration_min": round(duration / 60, 1) if duration else None,
                 "distance_km": round(distance / 1000, 2) if distance else None,
-                "avg_hr": a.get("averageHR"),
-                "calories": a.get("calories"),
+                "avg_hr": as_int(a.get("averageHR")),
+                "calories": as_int(a.get("calories")),
             }
         )
     return cleaned
