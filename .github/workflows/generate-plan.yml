@@ -1,6 +1,10 @@
 name: Generate training plan
 
 on:
+  schedule:
+    # 20 min after the Garmin sync (garmin-sync.yml runs at 11:00 UTC), so
+    # today's adherence check sees freshly synced activity data.
+    - cron: "20 11 * * *"
   workflow_dispatch: {}
 
 jobs:

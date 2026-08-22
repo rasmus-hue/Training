@@ -252,13 +252,20 @@ function todayISO() {
   const d = new Date();
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
+// Calendar-date arithmetic anchored in UTC throughout (construct, mutate, and
+// serialize all in UTC) so it gives the same YYYY-MM-DD result regardless of
+// the viewer's timezone. Mixing local-time construction with .toISOString()
+// (UTC) here silently rolls dates back a day in any UTC+ timezone.
 function addDays(iso, n) {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + n);
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+function weekdayMon0(iso) {
+  return (new Date(iso + "T00:00:00Z").getUTCDay() + 6) % 7; // 0=Mon .. 6=Sun
+}
 function daysBetween(a, b) {
-  return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
+  return Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / 86400000);
 }
 function classify(type) {
   type = (type || "").toLowerCase();
@@ -398,8 +405,7 @@ function renderRecentActivities(activities) {
 
 function renderWeekTable(planDaily, activities) {
   const today = todayISO();
-  const d = new Date(today + "T00:00:00");
-  const thisMonday = addDays(today, -((d.getDay() + 6) % 7));
+  const thisMonday = addDays(today, -weekdayMon0(today));
   const days = [...Array(7)].map((_, i) => addDays(thisMonday, i));
   const actualsWithKey = activities.map(a => ({ ...a, dateKey: (a.start || "").slice(0, 10) }));
 
@@ -457,8 +463,7 @@ function compareTable(rows) {
 }
 function renderWeekReview(planWeekly, wellness, activities) {
   const today = todayISO();
-  const d = new Date(today + "T00:00:00");
-  const thisMonday = addDays(today, -((d.getDay() + 6) % 7));
+  const thisMonday = addDays(today, -weekdayMon0(today));
   const lastMonday = addDays(thisMonday, -7);
   const lastSunday = addDays(lastMonday, 6);
   document.getElementById("review-week-title").textContent = `Ugentlig review (${lastMonday} – ${lastSunday})`;
@@ -512,8 +517,7 @@ function barChart(data, key, color, height = 150) {
 }
 function renderVolumeChart(activities) {
   const today = todayISO();
-  const d = new Date(today + "T00:00:00");
-  const thisMonday = addDays(today, -((d.getDay() + 6) % 7));
+  const thisMonday = addDays(today, -weekdayMon0(today));
   const weeks = [];
   for (let i = 7; i >= 0; i--) {
     const monday = addDays(thisMonday, -7 * i);
