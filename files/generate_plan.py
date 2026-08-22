@@ -93,9 +93,22 @@ def quality_run_km(long_km: float, phase: str) -> float:
     return round(max(3.0, long_km * 0.55), 1)
 
 
-def easy_pace(phase: str) -> str:
-    return {"base": "6:20-6:40/km", "build1": "6:05-6:25/km", "build2": "5:50-6:10/km",
-            "peak": "5:45-6:05/km", "taper": "5:50-6:10/km", "race": "6:00-6:20/km"}[phase]
+EASY_PACE_RANGE_SEC = {
+    "base": (380, 400), "build1": (365, 385), "build2": (350, 370),
+    "peak": (345, 365), "taper": (350, 370), "race": (360, 380),
+}  # seconds/km -- matches the strings below exactly, kept numeric so it's adjustable
+
+
+def format_pace_range(lo_sec: float, hi_sec: float) -> str:
+    def fmt(s):
+        m, sec = divmod(round(s), 60)
+        return f"{m}:{sec:02d}"
+    return f"{fmt(lo_sec)}-{fmt(hi_sec)}/km"
+
+
+def easy_pace(phase: str, offset_sec: float = 0) -> str:
+    lo, hi = EASY_PACE_RANGE_SEC[phase]
+    return format_pace_range(lo + offset_sec, hi + offset_sec)
 
 
 def quality_session(phase: str, w: int) -> tuple[str, str]:
@@ -294,10 +307,58 @@ def adjust_factor(execution: float) -> float:
     return 0.6
 
 
+def current_phase(weekly_by_monday: dict) -> str:
+    monday = (TODAY - timedelta(days=TODAY.weekday())).isoformat()
+    week = weekly_by_monday.get(monday)
+    return week["phase"] if week else "base"
+
+
+def recent_easy_pace_offset(phase: str, lookback_days: int = 14) -> "float | None":
+    """Seconds/km your actual easy/long-run pace has drifted from what this
+    phase's easy-pace band assumes. Positive = you're running slower than
+    expected (ease the target off); negative = faster (target can tighten a
+    little). Only easy/long days count -- quality sessions are deliberately
+    faster and aren't a fitness signal for the *easy* pace. Capped
+    asymmetrically: generous if you're struggling, conservative if you're
+    flying, since "easy" should stay easy rather than creep into tempo."""
+    since = (TODAY - timedelta(days=lookback_days)).isoformat()
+    planned = supabase_get(
+        "plan_daily", "date,discipline",
+        f"date=gte.{since}&date=lt.{TODAY.isoformat()}&discipline=in.(run_easy,run_long)",
+    )
+    if not planned:
+        return None
+    activities = supabase_get(
+        "garmin_activities", "start,type,name,distance_km,duration_min", f"start=gte.{since}"
+    )
+    by_date = {}
+    for a in activities:
+        if classify(a) == "run":
+            by_date.setdefault((a.get("start") or "")[:10], []).append(a)
+
+    paces = []
+    for p in planned:
+        for a in by_date.get(p["date"], []):
+            pace = pace_sec_per_km(a.get("distance_km"), a.get("duration_min"))
+            if pace:
+                paces.append(pace)
+    if not paces:
+        return None
+
+    expected_mid = sum(EASY_PACE_RANGE_SEC[phase]) / 2
+    offset = (sum(paces) / len(paces)) - expected_mid
+    return max(-15, min(30, offset))
+
+
 def build_daily_rows(days: int = 7):
     weekly_by_monday = {r["week_start"]: r for r in build_weekly_rows()}
     execution, n_planned, avg_run_pace = recent_execution()
     factor = adjust_factor(execution)
+
+    phase_now = current_phase(weekly_by_monday)
+    pace_offset = recent_easy_pace_offset(phase_now) or 0
+    apply_pace_offset = abs(pace_offset) >= 5
+
     adjust_note = ""
     if n_planned:
         if factor < 1.0:
@@ -306,6 +367,9 @@ def build_daily_rows(days: int = 7):
             adjust_note = " (justeret lidt op -- du overpræsterede sidste uges volumen)"
         if avg_run_pace:
             adjust_note += f" [snit løbepace sidste uge: {avg_run_pace}]"
+    if apply_pace_offset:
+        direction = "langsommere" if pace_offset > 0 else "hurtigere"
+        adjust_note += f" [rolig-tempo justeret {direction} ud fra din faktiske pace sidste 14 dage]"
 
     rows = []
     for i in range(days):
@@ -315,14 +379,15 @@ def build_daily_rows(days: int = 7):
         if week is None:
             continue
         phase = week["phase"]
+        day_easy_pace = easy_pace(phase, pace_offset if apply_pace_offset else 0)
         for kind in WEEKDAY_TEMPLATE[d.weekday()]:
             if kind == "run_long":
                 distance = round(week["long_run_km"] * factor, 1)
-                title, desc = "Langtur", f"{distance} km i {week['easy_pace']}{adjust_note}"
+                title, desc = "Langtur", f"{distance} km i {day_easy_pace}{adjust_note}"
                 duration = None
             elif kind == "run_easy":
                 distance = round(easy_run_km(week["long_run_km"], phase) * factor, 1)
-                title, desc = "Rolig løbetur", f"~{distance} km i {week['easy_pace']}{adjust_note}"
+                title, desc = "Rolig løbetur", f"~{distance} km i {day_easy_pace}{adjust_note}"
                 duration = None
             elif kind == "run_quality":
                 distance = round(quality_run_km(week["long_run_km"], phase) * factor, 1)
