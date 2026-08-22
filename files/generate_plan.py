@@ -167,15 +167,31 @@ def build_weekly_rows():
     return rows
 
 
-def classify(type_str: str) -> str:
-    t = (type_str or "").lower()
+def classify(activity: dict) -> str:
+    t = (activity.get("type") or "").lower()
+    n = (activity.get("name") or "").lower()
     if "run" in t:
         return "run"
-    if "cycl" in t or "bik" in t:
+    # Garmin labels indoor/Zwift rides "virtual_ride" (no "cycl"/"bik" in it),
+    # so also match "ride" and fall back to the activity name.
+    if "cycl" in t or "bik" in t or "ride" in t or "zwift" in n:
         return "bike"
     if "strength" in t or "weight" in t:
         return "strength"
     return "other"
+
+
+def pace_sec_per_km(distance_km, duration_min):
+    if not distance_km or not duration_min:
+        return None
+    return (duration_min * 60) / distance_km
+
+
+def format_pace(sec_per_km) -> "str | None":
+    if sec_per_km is None:
+        return None
+    minutes, seconds = divmod(round(sec_per_km), 60)
+    return f"{minutes}:{seconds:02d}/km"
 
 
 def supabase_get(table: str, select: str, filters: str = "") -> list[dict]:
@@ -195,42 +211,101 @@ def supabase_get(table: str, select: str, filters: str = "") -> list[dict]:
         return []
 
 
-def recent_adherence(lookback_days: int = 7) -> tuple[float, int]:
-    """How much of the last week's plan actually happened, judged by whether a
-    same-day, same-discipline Garmin activity exists. Returns (fraction, n_planned)."""
+def session_execution_score(planned_row: dict, matched: list[dict]) -> float:
+    """0..1.2: how much of the prescribed distance/duration actually happened
+    for one session, not just whether it happened at all."""
+    if not matched:
+        return 0.0
+    total_distance = sum(a.get("distance_km") or 0 for a in matched)
+    total_duration = sum(a.get("duration_min") or 0 for a in matched)
+    target_distance = planned_row.get("target_distance_km")
+    target_duration = planned_row.get("target_duration_min")
+    if target_distance:
+        ratio = (total_distance / target_distance) if target_distance else 1.0
+    elif target_duration:
+        ratio = (total_duration / target_duration) if target_duration else 1.0
+    else:
+        ratio = 1.0
+    return round(min(1.2, ratio), 2)  # cap credit for overdoing the volume
+
+
+def recent_execution(lookback_days: int = 7) -> tuple[float, int, "str | None"]:
+    """How well the last week's plan actually went: for each planned session,
+    how much of the prescribed distance/duration was actually covered (not
+    just yes/no), averaged across the week. Strength sessions stay yes/no --
+    Garmin can't tell push from pull from legs, so presence (a same-day
+    activity, or a logged exercise for that date+discipline) is all we have.
+    Returns (avg_execution, n_planned, average run pace last week or None).
+    """
     since = (TODAY - timedelta(days=lookback_days)).isoformat()
-    planned = supabase_get("plan_daily", "date,discipline", f"date=gte.{since}&date=lt.{TODAY.isoformat()}")
+    planned = supabase_get(
+        "plan_daily", "date,discipline,target_distance_km,target_duration_min",
+        f"date=gte.{since}&date=lt.{TODAY.isoformat()}",
+    )
     if not planned:
-        return 1.0, 0
-    activities = supabase_get("garmin_activities", "start,type", f"start=gte.{since}")
-    done_by_group = {}
+        return 1.0, 0, None
+
+    activities = supabase_get(
+        "garmin_activities", "start,type,name,distance_km,duration_min", f"start=gte.{since}"
+    )
+    strength_logged = supabase_get("strength_log", "date,discipline", f"date=gte.{since}")
+    logged_dates = {(row["date"], row.get("discipline")) for row in strength_logged}
+
+    by_group_date: dict[tuple, list] = {}
     for a in activities:
-        g = classify(a.get("type"))
-        done_by_group.setdefault(g, set()).add((a.get("start") or "")[:10])
-    hits = sum(1 for p in planned if p["date"] in done_by_group.get(p["discipline"].split("_")[0], set()))
-    return hits / len(planned), len(planned)
+        key = (classify(a), (a.get("start") or "")[:10])
+        by_group_date.setdefault(key, []).append(a)
+
+    scores = []
+    for p in planned:
+        group = p["discipline"].split("_")[0]
+        matched = by_group_date.get((group, p["date"]), [])
+        if group == "strength":
+            done = bool(matched) or (p["date"], p["discipline"]) in logged_dates
+            scores.append(1.0 if done else 0.0)
+        else:
+            scores.append(session_execution_score(p, matched))
+
+    run_paces = [
+        pace_sec_per_km(a.get("distance_km"), a.get("duration_min"))
+        for a in activities if classify(a) == "run"
+    ]
+    run_paces = [p for p in run_paces if p is not None]
+    avg_run_pace = format_pace(sum(run_paces) / len(run_paces)) if run_paces else None
+
+    avg_execution = sum(scores) / len(scores) if scores else 1.0
+    return avg_execution, len(planned), avg_run_pace
 
 
-def adjust_factor(adherence: float) -> float:
-    """Pull upcoming run/bike volume back when recent sessions were mostly missed,
-    instead of blindly progressing the fixed macro formula regardless of what
-    actually happened."""
-    if adherence >= 0.85:
+def adjust_factor(execution: float) -> float:
+    """Pull upcoming run/bike volume back when recent sessions were under-
+    executed (missed, cut short, or otherwise below prescription) -- or nudge
+    it up slightly when consistently over-delivered -- instead of blindly
+    progressing the fixed macro formula regardless of what actually happened.
+    """
+    if execution >= 1.05:
+        return 1.05
+    if execution >= 0.85:
         return 1.0
-    if adherence >= 0.6:
+    if execution >= 0.6:
         return 0.9
-    if adherence >= 0.4:
+    if execution >= 0.4:
         return 0.75
     return 0.6
 
 
 def build_daily_rows(days: int = 7):
     weekly_by_monday = {r["week_start"]: r for r in build_weekly_rows()}
-    adherence, n_planned = recent_adherence()
-    factor = adjust_factor(adherence)
+    execution, n_planned, avg_run_pace = recent_execution()
+    factor = adjust_factor(execution)
     adjust_note = ""
-    if n_planned and factor < 1.0:
-        adjust_note = f" (justeret ned {round((1 - factor) * 100)}% -- {round(adherence * 100)}% af sidste uges pas blev gennemført)"
+    if n_planned:
+        if factor < 1.0:
+            adjust_note = f" (justeret ned {round((1 - factor) * 100)}% -- sidste uges pas blev i snit kun {round(execution * 100)}% gennemført)"
+        elif factor > 1.0:
+            adjust_note = " (justeret lidt op -- du overpræsterede sidste uges volumen)"
+        if avg_run_pace:
+            adjust_note += f" [snit løbepace sidste uge: {avg_run_pace}]"
 
     rows = []
     for i in range(days):
