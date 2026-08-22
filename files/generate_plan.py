@@ -16,7 +16,10 @@ import sys
 import urllib.request
 from datetime import date, timedelta
 
-TODAY = date(2026, 8, 22)
+# Fixed anchor for week numbering/phases -- do NOT change on re-runs, or every
+# week's phase and week_start would shift and orphan the old plan_weekly rows.
+PLAN_START_MONDAY = date(2026, 8, 17)
+TODAY = date.today()
 RACE_DAY = date(2027, 6, 20)
 RACE_GOAL = "1:50-1:55 halvmaraton"
 RACE_PACE = "5:15-5:25/km"
@@ -135,10 +138,9 @@ def strength_desc(kind: str) -> str:
 
 
 def build_weekly_rows():
-    this_monday = TODAY - timedelta(days=TODAY.weekday())
     rows = []
     for w in range(1, 45):
-        week_start = this_monday + timedelta(weeks=w - 1)
+        week_start = PLAN_START_MONDAY + timedelta(weeks=w - 1)
         phase = phase_for_week(w)
         long_km = long_run_km(w, phase)
         easy_km = easy_run_km(long_km, phase)
