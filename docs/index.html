@@ -91,6 +91,7 @@
   .session-body { flex: 1; }
   .session-title { font-size: 14px; font-weight: 600; }
   .session-desc { font-size: 13px; color: var(--text-secondary); margin-top: 1px; }
+  .session-focus { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
   .session-actual { font-size: 12px; color: var(--series-3); margin-top: 2px; }
 
   .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -201,7 +202,11 @@
       <section id="tab-review-month" class="tabpanel">
         <div class="card">
           <h2>Løbevolumen, seneste 8 uger</h2>
-          <div id="volume-chart"></div>
+          <div id="volume-chart-run"></div>
+        </div>
+        <div class="card">
+          <h2>Cykelvolumen, seneste 8 uger</h2>
+          <div id="volume-chart-bike"></div>
         </div>
         <div class="card">
           <h2 id="review-month-title">Seneste 30 dage</h2>
@@ -282,6 +287,18 @@ function paceMinPerKm(distanceKm, durationMin) {
   return `${m}:${String(s).padStart(2, "0")}/km`;
 }
 
+const FOCUS_TEXT = {
+  run_easy: "Fokus: rolig, aerob opbygning. Det skal føles let -- hold samtaletempo hele vejen, det er ikke en dag at presse på.",
+  run_quality: "Fokus: kvalitet frem for mængde. Denne økt vænner krop og ben til at løbe hurtigere end vanligt, kontrolleret.",
+  run_long: "Fokus: ugens vigtigste løbetur. Det er den der bygger den udholdenhed, der bærer dig i mål til halvmaraton -- prioritér denne, hvis du kun har tid til én ting.",
+  bike_endurance: "Fokus: let, jævn kondition på cyklen. Aflaster løbebenene, mens du stadig træner hjerte-kar-systemet.",
+  bike_quality: "Fokus: løfter din kondition og benkraft på cyklen med kontrollerede intervaller -- lidt hårdere end grundturene.",
+  bike_recovery: "Fokus: ren restitution. Meget let, bare for at få blod i benene efter hårde dage.",
+  strength_push: "Fokus: overkrop skub (bryst, skuldre, triceps). Støtter kropsholdning og løbeøkonomi over tid.",
+  strength_pull: "Fokus: overkrop træk (ryg, biceps). Modvirker den skæve belastning fra meget løb og cykling.",
+  strength_legs: "Fokus: benstyrke og stabilitet. Reducerer skadesrisiko og giver ekstra kraft, når det gælder.",
+};
+
 function tile(value, unit, label) {
   const div = document.createElement("div");
   div.className = "tile";
@@ -305,6 +322,7 @@ function sessionRow(planRow, actuals) {
     <div class="session-body">
       <div class="session-title">${planRow.title || ""}</div>
       <div class="session-desc">${planRow.prescription || ""}</div>
+      ${FOCUS_TEXT[planRow.discipline] ? `<div class="session-focus">${FOCUS_TEXT[planRow.discipline]}</div>` : ""}
       ${actualText ? `<div class="session-actual">Faktisk: ${actualText}</div>` : ""}
     </div>`;
   return row;
@@ -498,7 +516,7 @@ function renderMonthReview(planWeekly, wellness, activities) {
   ]);
 }
 
-function barChart(data, key, color, height = 150) {
+function barChart(data, key, color, unit, height = 150) {
   const width = 680, padL = 8, padR = 8, padT = 14, padB = 22;
   const max = Math.max(1, ...data.map(d => d[key]));
   const n = data.length;
@@ -509,24 +527,33 @@ function barChart(data, key, color, height = 150) {
     const x = padL + i * slot + (slot - bw) / 2;
     const h = (d[key] / max) * (height - padT - padB);
     const y = height - padB - h;
-    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}"><title>Uge ${d.label}: ${fmt(d[key])} km</title></rect>`;
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}"><title>Uge ${d.label}: ${fmt(d[key])}${unit}</title></rect>`;
     bars += `<text x="${(x + bw / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" fill="var(--text-secondary)">${fmt(d[key])}</text>`;
     bars += `<text x="${(x + bw / 2).toFixed(1)}" y="${height - 6}" text-anchor="middle">${d.label}</text>`;
   });
   return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">${bars}</svg>`;
 }
-function renderVolumeChart(activities) {
+function weeklySeries(activities, group, valueFn, weeksBack = 8) {
   const today = todayISO();
   const thisMonday = addDays(today, -weekdayMon0(today));
   const weeks = [];
-  for (let i = 7; i >= 0; i--) {
+  for (let i = weeksBack - 1; i >= 0; i--) {
     const monday = addDays(thisMonday, -7 * i);
     const sunday = addDays(monday, 6);
-    const km = activities.filter(a => classify(a.type) === "run" && (a.start || "").slice(0, 10) >= monday && (a.start || "").slice(0, 10) <= sunday)
-      .reduce((s, a) => s + (a.distance_km || 0), 0);
-    weeks.push({ label: monday.slice(5), km: Math.round(km * 10) / 10 });
+    const val = activities
+      .filter(a => classify(a.type) === group && (a.start || "").slice(0, 10) >= monday && (a.start || "").slice(0, 10) <= sunday)
+      .reduce((s, a) => s + valueFn(a), 0);
+    weeks.push({ label: monday.slice(5), val: Math.round(val * 10) / 10 });
   }
-  document.getElementById("volume-chart").innerHTML = barChart(weeks, "km", getComputedStyle(document.documentElement).getPropertyValue("--series-1").trim());
+  return weeks;
+}
+function renderVolumeChart(activities) {
+  const runWeeks = weeklySeries(activities, "run", a => a.distance_km || 0);
+  const bikeWeeks = weeklySeries(activities, "bike", a => (a.duration_min || 0) / 60);
+  document.getElementById("volume-chart-run").innerHTML =
+    barChart(runWeeks, "val", getComputedStyle(document.documentElement).getPropertyValue("--series-1").trim(), " km");
+  document.getElementById("volume-chart-bike").innerHTML =
+    barChart(bikeWeeks, "val", getComputedStyle(document.documentElement).getPropertyValue("--series-2").trim(), " t");
 }
 
 function setupTabs() {
