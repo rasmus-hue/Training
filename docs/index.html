@@ -634,7 +634,7 @@ function aggregateActuals(wellness, activities, startDate, endDate) {
     bikeSessions: bikes.length,
     bikeMin: bikes.reduce((s, x) => s + (x.duration_min || 0), 0),
     strengthSessions: strength.length,
-    avgSteps: w.length ? Math.round(w.reduce((s, x) => s + (x.steps || 0), 0) / w.length) : null,
+    avgSteps: w.filter(x => x.steps != null).length ? Math.round(w.reduce((s, x) => s + (x.steps || 0), 0) / w.filter(x => x.steps != null).length) : null,
     avgSleep: w.filter(x => x.sleep_hours != null).length ? (w.reduce((s, x) => s + (x.sleep_hours || 0), 0) / w.filter(x => x.sleep_hours != null).length) : null,
     avgRhr: w.filter(x => x.resting_hr != null).length ? Math.round(w.reduce((s, x) => s + (x.resting_hr || 0), 0) / w.filter(x => x.resting_hr != null).length) : null,
   };
@@ -690,47 +690,73 @@ function renderExerciseProgress(rows) {
     <tbody>${body}</tbody></table>`;
 }
 
+const STEPS_GOAL = 12000; // flat daily target, doesn't vary by week
+
 function compareTable(rows) {
   let html = `<div class="compare-head"><div></div><div class="actual">Faktisk</div><div class="target">Mål</div></div>`;
   rows.forEach(r => { html += `<div class="compare-row"><div class="metric">${r.label}</div><div class="actual">${r.actual}</div><div class="target">${r.target}</div></div>`; });
   return html;
 }
-function renderWeekReview(planWeekly, wellness, activities) {
+
+// Targets from what was ACTUALLY prescribed in plan_daily for this exact
+// date range, not the fixed plan_weekly macro constants. The macro number
+// (e.g. "3 runs/week") is always the same for a full week even for the
+// first partial week, before the daily plan existed to prescribe every day
+// of it -- comparing against that would blame you for sessions that were
+// never actually assigned because the system didn't exist yet on those days.
+function planDailyTargets(planDaily, start, end) {
+  const inRange = planDaily.filter(p => p.date >= start && p.date <= end);
+  const runRows = inRange.filter(p => disciplineGroup(p.discipline) === "run");
+  const bikeRows = inRange.filter(p => disciplineGroup(p.discipline) === "bike");
+  return {
+    runSessions: runRows.length,
+    runKmTarget: runRows.reduce((s, p) => s + (p.target_distance_km || 0), 0),
+    bikeSessions: bikeRows.length,
+    bikeMinTarget: bikeRows.reduce((s, p) => s + (p.target_duration_min || 0), 0),
+    strength_push: inRange.filter(p => p.discipline === "strength_push").length,
+    strength_pull: inRange.filter(p => p.discipline === "strength_pull").length,
+    strength_legs: inRange.filter(p => p.discipline === "strength_legs").length,
+    hasAnyPlan: inRange.length > 0,
+  };
+}
+
+function renderWeekReview(wellness, activities, planDaily, strengthLog) {
   const today = todayISO();
   const thisMonday = addDays(today, -weekdayMon0(today));
   const lastMonday = addDays(thisMonday, -7);
   const lastSunday = addDays(lastMonday, 6);
   document.getElementById("review-week-title").textContent = `Ugentlig review (${lastMonday} – ${lastSunday})`;
-  const target = planWeekly.find(w => w.week_start === lastMonday);
+  const target = planDailyTargets(planDaily, lastMonday, lastSunday);
   const actual = aggregateActuals(wellness, activities, lastMonday, lastSunday);
+  const strengthCounts = strengthDisciplineCounts(planDaily, activities, strengthLog, lastMonday, lastSunday);
   const body = document.getElementById("review-week-body");
-  if (!target) { body.innerHTML = `<p class="empty">Ingen plandata for den uge endnu.</p>`; return; }
+  if (!target.hasAnyPlan) { body.innerHTML = `<p class="empty">Ingen plandata for den uge endnu.</p>`; return; }
   body.innerHTML = compareTable([
-    { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(target.run_km_target, " km") },
-    { label: "Løbeture", actual: actual.runSessions, target: target.run_sessions },
-    { label: "Zwift-ture", actual: actual.bikeSessions, target: target.bike_sessions },
-    { label: "Zwift (min)", actual: fmt(actual.bikeMin, " min"), target: fmt(target.bike_minutes_target, " min") },
-    { label: "Styrkepas", actual: actual.strengthSessions, target: target.strength_push + target.strength_pull + target.strength_legs },
-    { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(target.steps_goal) },
+    { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(target.runKmTarget, " km") },
+    { label: "Løbeture", actual: actual.runSessions, target: target.runSessions },
+    { label: "Zwift-ture", actual: actual.bikeSessions, target: target.bikeSessions },
+    { label: "Zwift (min)", actual: fmt(actual.bikeMin, " min"), target: fmt(target.bikeMinTarget, " min") },
+    { label: "Styrke -- Push", actual: strengthCounts.strength_push, target: target.strength_push },
+    { label: "Styrke -- Pull", actual: strengthCounts.strength_pull, target: target.strength_pull },
+    { label: "Styrke -- Legs", actual: strengthCounts.strength_legs, target: target.strength_legs },
+    { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(STEPS_GOAL) },
   ]);
 }
-function renderMonthReview(planWeekly, wellness, activities, planDaily, strengthLog) {
+function renderMonthReview(wellness, activities, planDaily, strengthLog) {
   const today = todayISO();
   const start = addDays(today, -29);
   const actual = aggregateActuals(wellness, activities, start, today);
-  const weeksInRange = planWeekly.filter(w => w.week_start >= start && w.week_start <= today);
-  const targetSum = (key) => weeksInRange.reduce((s, w) => s + (w[key] || 0), 0);
-  const targetAvg = (key) => weeksInRange.length ? Math.round(weeksInRange.reduce((s, w) => s + (w[key] || 0), 0) / weeksInRange.length) : null;
+  const target = planDailyTargets(planDaily, start, today);
   const strengthCounts = strengthDisciplineCounts(planDaily, activities, strengthLog, start, today);
 
   document.getElementById("review-month-body").innerHTML = compareTable([
-    { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(targetSum("run_km_target"), " km") },
-    { label: "Løbeture", actual: actual.runSessions, target: targetSum("run_sessions") },
-    { label: "Zwift-ture", actual: actual.bikeSessions, target: targetSum("bike_sessions") },
-    { label: "Styrke -- Push", actual: strengthCounts.strength_push, target: targetSum("strength_push") },
-    { label: "Styrke -- Pull", actual: strengthCounts.strength_pull, target: targetSum("strength_pull") },
-    { label: "Styrke -- Legs", actual: strengthCounts.strength_legs, target: targetSum("strength_legs") },
-    { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(targetAvg("steps_goal")) },
+    { label: "Løb (km)", actual: fmt(actual.runKm, " km"), target: fmt(target.runKmTarget, " km") },
+    { label: "Løbeture", actual: actual.runSessions, target: target.runSessions },
+    { label: "Zwift-ture", actual: actual.bikeSessions, target: target.bikeSessions },
+    { label: "Styrke -- Push", actual: strengthCounts.strength_push, target: target.strength_push },
+    { label: "Styrke -- Pull", actual: strengthCounts.strength_pull, target: target.strength_pull },
+    { label: "Styrke -- Legs", actual: strengthCounts.strength_legs, target: target.strength_legs },
+    { label: "Snit skridt/dag", actual: fmt(actual.avgSteps), target: fmt(STEPS_GOAL) },
     { label: "Snit søvn", actual: fmt(actual.avgSleep, " t"), target: "–" },
     { label: "Snit hvilepuls", actual: fmt(actual.avgRhr, " bpm"), target: "–" },
   ]);
@@ -818,8 +844,8 @@ async function loadDashboard() {
   renderToday(planDaily, wellness, activities, planWeekly, strengthLog);
   renderRecentActivities(activities);
   renderWeekTable(planDaily, activities);
-  renderWeekReview(planWeekly, wellness, activities);
-  renderMonthReview(planWeekly, wellness, activities, planDaily, strengthLog);
+  renderWeekReview(wellness, activities, planDaily, strengthLog);
+  renderMonthReview(wellness, activities, planDaily, strengthLog);
   renderVolumeChart(activities);
   setupTabs();
 }
