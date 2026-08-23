@@ -623,7 +623,13 @@ function renderWeekTable(planDaily, activities) {
 
 function aggregateActuals(wellness, activities, startDate, endDate) {
   const inRange = d => d >= startDate && d <= endDate;
-  const w = wellness.filter(x => inRange(x.date));
+  const today = todayISO();
+  // Exclude today from the wellness averages -- it's still a partial day
+  // (steps still accumulating, sleep/HRV not computed until tonight), so
+  // including it would drag the average toward an incomplete number.
+  // Session counts (below) are unaffected: a completed run is complete
+  // data regardless of what time of day it is.
+  const w = wellness.filter(x => inRange(x.date) && x.date !== today);
   const a = activities.filter(x => inRange((x.start || "").slice(0, 10)));
   const runs = a.filter(x => classify(x) === "run");
   const bikes = a.filter(x => classify(x) === "bike");
