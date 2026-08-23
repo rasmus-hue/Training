@@ -81,6 +81,7 @@
   .status-metrics { display: flex; gap: 18px; margin-top: 12px; flex-wrap: wrap; }
   .status-metric .value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .status-metric .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+  .data-date { font-size: 10px; text-transform: none; letter-spacing: 0; color: var(--warning); font-weight: 600; }
 
   .session-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--gridline); }
   .session-row:last-child { border-bottom: none; }
@@ -174,7 +175,7 @@
 
       <section id="tab-today" class="tabpanel active">
         <div class="card">
-          <h2>Dagens status</h2>
+          <h2>Dagens status <span id="status-data-date" class="data-date"></span></h2>
           <div id="status-banner" class="status-banner"></div>
         </div>
 
@@ -185,7 +186,7 @@
               <div id="today-training"></div>
             </div>
             <div class="col">
-              <h3><span class="dot" style="background:var(--series-3)"></span>Restitution</h3>
+              <h3><span class="dot" style="background:var(--series-3)"></span>Restitution <span id="recovery-data-date" class="data-date"></span></h3>
               <div id="today-recovery" class="tiles"></div>
               <div id="today-steps"></div>
             </div>
@@ -493,9 +494,11 @@ function renderHero(planWeekly) {
 
 function renderStatus(wellness) {
   const el = document.getElementById("status-banner");
+  const dateLabel = document.getElementById("status-data-date");
   const sorted = [...wellness].sort((a, b) => a.date < b.date ? -1 : 1);
   const latest = sorted[sorted.length - 1];
-  if (!latest) { el.innerHTML = `<p class="empty">Ingen data endnu.</p>`; return; }
+  if (!latest) { el.innerHTML = `<p class="empty">Ingen data endnu.</p>`; if (dateLabel) dateLabel.textContent = ""; return; }
+  if (dateLabel) dateLabel.textContent = latest.date === todayISO() ? "" : `(seneste data: ${latest.date})`;
 
   const baseline = sorted.slice(-15, -1).filter(w => w.resting_hr != null);
   const baselineRhr = baseline.length ? baseline.reduce((s, w) => s + w.resting_hr, 0) / baseline.length : null;
@@ -540,6 +543,8 @@ function renderToday(planDaily, wellness, activities, planWeekly, strengthLog) {
   }
 
   const w = wellness.find(w => w.date === today) || wellness[wellness.length - 1];
+  const recoveryDateLabel = document.getElementById("recovery-data-date");
+  if (recoveryDateLabel) recoveryDateLabel.textContent = (w && w.date !== today) ? `(seneste data: ${w.date})` : "";
   const recovery = document.getElementById("today-recovery");
   recovery.innerHTML = "";
   if (w) {
