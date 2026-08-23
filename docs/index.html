@@ -542,7 +542,8 @@ function renderToday(planDaily, wellness, activities, planWeekly, strengthLog) {
     });
   }
 
-  const w = wellness.find(w => w.date === today) || wellness[wellness.length - 1];
+  const w = wellness.find(w => w.date === today)
+    || wellness.reduce((latest, x) => (!latest || x.date > latest.date) ? x : latest, null);
   const recoveryDateLabel = document.getElementById("recovery-data-date");
   if (recoveryDateLabel) recoveryDateLabel.textContent = (w && w.date !== today) ? `(seneste data: ${w.date})` : "";
   const recovery = document.getElementById("today-recovery");
@@ -795,10 +796,10 @@ async function loadDashboard() {
   let wellness = [], activities = [], planWeekly = [], planDaily = [], strengthLog = [];
   try {
     const [wRes, aRes, pwRes, pdRes, slRes] = await Promise.all([
-      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.asc&limit=90`, { headers }),
+      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.desc&limit=90`, { headers }),
       fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=200`, { headers }),
       fetch(`${base}/rest/v1/plan_weekly?select=*&order=week_start.asc&limit=52`, { headers }),
-      fetch(`${base}/rest/v1/plan_daily?select=*&order=date.asc&limit=100`, { headers }),
+      fetch(`${base}/rest/v1/plan_daily?select=*&order=date.desc&limit=100`, { headers }),
       fetch(`${base}/rest/v1/strength_log?select=*&order=date.desc&limit=200`, { headers }),
     ]);
     wellness = await wRes.json();
