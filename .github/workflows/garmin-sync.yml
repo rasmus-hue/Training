@@ -2,13 +2,14 @@ name: Garmin sync
 
 on:
   schedule:
-    # Hourly during Danish daytime only (06:00-23:00 Europe/Copenhagen), so
-    # you get fresh data through the day without pointless syncs while
+    # Every 15 min during Danish daytime only (06:00-23:00 Europe/Copenhagen),
+    # so you get fresh data through the day without pointless syncs while
     # you're asleep. Cron is UTC and doesn't shift for Danish DST -- this is
     # 04:00-21:00 UTC, correct for CEST (summer). Once clocks fall back in
     # late October, shift both hours 1 earlier (03-20) to stay 06:00-23:00
-    # local, or ask Claude to do it.
-    - cron: "0 4-21 * * *"
+    # local, or ask Claude to do it. GitHub can delay or occasionally skip a
+    # scheduled run under load -- normal, the next one 15 min later covers it.
+    - cron: "*/15 4-21 * * *"
   workflow_dispatch:
     inputs:
       days:
