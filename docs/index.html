@@ -771,11 +771,11 @@ function weeklySeries(activities, group, valueFn, weeksBack = 8) {
 }
 function renderVolumeChart(activities) {
   const runWeeks = weeklySeries(activities, "run", a => a.distance_km || 0);
-  const bikeWeeks = weeklySeries(activities, "bike", a => (a.duration_min || 0) / 60);
+  const bikeWeeks = weeklySeries(activities, "bike", a => a.distance_km || 0);
   document.getElementById("volume-chart-run").innerHTML =
     barChart(runWeeks, "val", getComputedStyle(document.documentElement).getPropertyValue("--series-1").trim(), " km");
   document.getElementById("volume-chart-bike").innerHTML =
-    barChart(bikeWeeks, "val", getComputedStyle(document.documentElement).getPropertyValue("--series-2").trim(), " t");
+    barChart(bikeWeeks, "val", getComputedStyle(document.documentElement).getPropertyValue("--series-2").trim(), " km");
 }
 
 function setupTabs() {
