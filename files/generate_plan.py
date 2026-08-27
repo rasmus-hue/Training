@@ -87,12 +87,6 @@ def easy_run_km(long_km: float, phase: str) -> float:
     return round(max(3.0, long_km * 0.5), 1)
 
 
-def quality_run_km(long_km: float, phase: str) -> float:
-    if phase == "race":
-        return 3.0
-    return round(max(3.0, long_km * 0.55), 1)
-
-
 EASY_PACE_RANGE_SEC = {
     "base": (380, 400), "build1": (365, 385), "build2": (350, 370),
     "peak": (345, 365), "taper": (350, 370), "race": (360, 380),
@@ -111,19 +105,67 @@ def easy_pace(phase: str, offset_sec: float = 0) -> str:
     return format_pace_range(lo + offset_sec, hi + offset_sec)
 
 
-def quality_session(phase: str, easy_pace_text: str) -> tuple[str, str]:
-    """Returns (title, description). The description always spells out the
-    full run: what pace for the warm-up/easy portion AND what pace for the
-    quality portion -- never just "resten roligt" with no number attached."""
+def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, factor: float = 1.0) -> tuple[str, str, float]:
+    """Returns (title, description, total_km). The warm-up/easy portion and
+    the hard (tempo/interval/race-pace) portion are computed as real km that
+    always sum exactly to total_km -- the description is built FROM the
+    numbers, never stated as a separate, disconnected figure. `factor`
+    (the run-execution adjustment) scales the whole session's ambition
+    before the split, so a pulled-back week is a smaller version of the
+    same structure, not a mismatched leftover fraction."""
+    if phase == "race":
+        return "Opvarmning til løbet", f"20-30 min let jog i {easy_pace_text} med et par stryg (korte accelerationer) undervejs", 3.0
+
+    ambition_km = round(max(3.0, long_km * 0.55) * factor, 1)
+
+    # Heavy pullback: not enough room for a real quality segment plus a
+    # sensible warm-up -- better to just run easy and rebuild than to cram
+    # a shrunken interval set into too little distance.
+    if factor <= 0.75:
+        return (
+            "Rolig løbetur (kvalitet sat på pause)",
+            f"{ambition_km} km i {easy_pace_text} -- ingen hård del denne gang, fokus på at komme tilbage på sporet",
+            ambition_km,
+        )
+
     if phase == "base":
-        return "Rolig tempo-tur", f"Opvarmning i {easy_pace_text}, sidste 10-15 min i 5:45-6:05/km"
-    if phase == "build1":
-        return "Tempo-intervaller", f"Opvarmning i {easy_pace_text}, så 4-6 x 4 min i 5:35-5:55/km med 2 min let jog i {easy_pace_text} imellem"
-    if phase in ("build2", "peak"):
-        return "Race-pace intervaller", f"Opvarmning i {easy_pace_text}, så 5-8 x 1 km i {RACE_PACE} med 2 min let jog i {easy_pace_text} imellem"
-    if phase == "taper":
-        return "Kort skarphed", f"Opvarmning i {easy_pace_text}, så 4 x 3 min i {RACE_PACE} med god pause (let jog) imellem"
-    return "Opvarmning til løbet", f"20-30 min let jog i {easy_pace_text} med et par stryg (korte accelerationer) undervejs"
+        quality_km = min(max(0.8, round(ambition_km * 0.25, 1)), ambition_km - 1.0)
+        title, quality_pace, quality_label = "Rolig tempo-tur", "5:45-6:05/km", "sammenhængende"
+    elif phase == "build1":
+        rep_km, min_reps = 0.6, 3
+        reps = max(min_reps, round((ambition_km * 0.35) / rep_km))
+        quality_km = round(reps * rep_km, 1)
+        while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
+            reps -= 1
+            quality_km = round(reps * rep_km, 1)
+        title, quality_pace = "Tempo-intervaller", "5:35-5:55/km"
+        quality_label = f"som {reps} x {round(rep_km * 1000)} m"
+    elif phase in ("build2", "peak"):
+        rep_km, min_reps = 1.0, 3
+        reps = max(min_reps, round((ambition_km * 0.45) / rep_km))
+        quality_km = round(reps * rep_km, 1)
+        while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
+            reps -= 1
+            quality_km = round(reps * rep_km, 1)
+        title, quality_pace = "Race-pace intervaller", RACE_PACE
+        quality_label = f"som {reps} x {rep_km:g} km"
+    else:  # taper
+        rep_km, min_reps = 0.8, 2
+        reps = max(min_reps, round((ambition_km * 0.30) / rep_km))
+        quality_km = round(reps * rep_km, 1)
+        while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
+            reps -= 1
+            quality_km = round(reps * rep_km, 1)
+        title, quality_pace = "Kort skarphed", RACE_PACE
+        quality_label = f"som {reps} x {round(rep_km * 1000)} m"
+
+    easy_km = round(max(1.0, ambition_km - quality_km), 1)
+    total_km = round(easy_km + quality_km, 1)
+    desc = (
+        f"{easy_km} km opvarmning/let løb i {easy_pace_text}, plus {quality_km} km {quality_label} "
+        f"i {quality_pace} (lette pauser undervejs) -- {total_km} km i alt"
+    )
+    return title, desc, total_km
 
 
 def bike_minutes(phase: str, kind: str) -> int:
@@ -160,8 +202,7 @@ def build_weekly_rows():
         phase = phase_for_week(w)
         long_km = long_run_km(w, phase)
         easy_km = easy_run_km(long_km, phase)
-        qual_km = quality_run_km(long_km, phase)
-        qual_title, qual_desc = quality_session(phase, easy_pace(phase))
+        qual_title, qual_desc, qual_km = build_quality_workout(long_km, phase, easy_pace(phase))
         rows.append({
             "week_start": week_start.isoformat(),
             "week_number": w,
@@ -384,9 +425,8 @@ def build_daily_rows(days: int = 7):
                 title, desc = "Rolig løbetur", f"~{distance} km i {day_easy_pace}{run_adjust_note}"
                 duration = None
             elif kind == "run_quality":
-                distance = round(quality_run_km(week["long_run_km"], phase) * factor, 1)
-                title, quality_desc = quality_session(phase, day_easy_pace)
-                desc = f"{distance} km i alt. {quality_desc}{run_adjust_note}"
+                title, quality_desc, distance = build_quality_workout(week["long_run_km"], phase, day_easy_pace, factor)
+                desc = f"{quality_desc}{run_adjust_note}"
                 duration = None
             elif kind in ("bike_endurance", "bike_quality", "bike_recovery"):
                 # Deliberately NOT run-adjusted -- Zwift stays at the plan's
