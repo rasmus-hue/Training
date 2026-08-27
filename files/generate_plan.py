@@ -111,16 +111,19 @@ def easy_pace(phase: str, offset_sec: float = 0) -> str:
     return format_pace_range(lo + offset_sec, hi + offset_sec)
 
 
-def quality_session(phase: str, w: int) -> tuple[str, str]:
+def quality_session(phase: str, easy_pace_text: str) -> tuple[str, str]:
+    """Returns (title, description). The description always spells out the
+    full run: what pace for the warm-up/easy portion AND what pace for the
+    quality portion -- never just "resten roligt" with no number attached."""
     if phase == "base":
-        return "Rolig tempo-tur", "Sidste 10-15 min i " + "5:45-6:05/km, resten roligt"
+        return "Rolig tempo-tur", f"Opvarmning i {easy_pace_text}, sidste 10-15 min i 5:45-6:05/km"
     if phase == "build1":
-        return "Tempo-intervaller", "4-6 x 4 min i 5:35-5:55/km, 2 min let jog imellem"
+        return "Tempo-intervaller", f"Opvarmning i {easy_pace_text}, så 4-6 x 4 min i 5:35-5:55/km med 2 min let jog i {easy_pace_text} imellem"
     if phase in ("build2", "peak"):
-        return "Race-pace intervaller", f"5-8 x 1 km i {RACE_PACE}, 2 min let jog imellem"
+        return "Race-pace intervaller", f"Opvarmning i {easy_pace_text}, så 5-8 x 1 km i {RACE_PACE} med 2 min let jog i {easy_pace_text} imellem"
     if phase == "taper":
-        return "Kort skarphed", f"4 x 3 min i {RACE_PACE}, god pause imellem"
-    return "Opvarmning til løbet", "20-30 min let jog med et par stryg"
+        return "Kort skarphed", f"Opvarmning i {easy_pace_text}, så 4 x 3 min i {RACE_PACE} med god pause (let jog) imellem"
+    return "Opvarmning til løbet", f"20-30 min let jog i {easy_pace_text} med et par stryg (korte accelerationer) undervejs"
 
 
 def bike_minutes(phase: str, kind: str) -> int:
@@ -158,7 +161,7 @@ def build_weekly_rows():
         long_km = long_run_km(w, phase)
         easy_km = easy_run_km(long_km, phase)
         qual_km = quality_run_km(long_km, phase)
-        qual_title, qual_desc = quality_session(phase, w)
+        qual_title, qual_desc = quality_session(phase, easy_pace(phase))
         rows.append({
             "week_start": week_start.isoformat(),
             "week_number": w,
@@ -243,41 +246,32 @@ def session_execution_score(planned_row: dict, matched: list[dict]) -> float:
 
 
 def recent_execution(lookback_days: int = 7) -> tuple[float, int, "str | None"]:
-    """How well the last week's plan actually went: for each planned session,
-    how much of the prescribed distance/duration was actually covered (not
-    just yes/no), averaged across the week. Strength sessions stay yes/no --
-    Garmin can't tell push from pull from legs, so presence (a same-day
-    activity, or a logged exercise for that date+discipline) is all we have.
-    Returns (avg_execution, n_planned, average run pace last week or None).
+    """How well the last week's RUNNING plan actually went: for each planned
+    run, how much of the prescribed distance was actually covered (not just
+    yes/no), averaged across the week. Run-only on purpose -- this score
+    drives the run-volume adjustment, and Zwift/strength performance
+    shouldn't pull your running targets around (nor vice versa; bike and
+    strength targets don't use this at all).
+    Returns (avg_run_execution, n_runs_planned, average run pace last week or None).
     """
     since = (TODAY - timedelta(days=lookback_days)).isoformat()
-    planned = supabase_get(
+    all_planned = supabase_get(
         "plan_daily", "date,discipline,target_distance_km,target_duration_min",
         f"date=gte.{since}&date=lt.{TODAY.isoformat()}",
     )
+    planned = [p for p in all_planned if p["discipline"].split("_")[0] == "run"]
     if not planned:
         return 1.0, 0, None
 
     activities = supabase_get(
         "garmin_activities", "start,type,name,distance_km,duration_min", f"start=gte.{since}"
     )
-    strength_logged = supabase_get("strength_log", "date,discipline", f"date=gte.{since}")
-    logged_dates = {(row["date"], row.get("discipline")) for row in strength_logged}
-
-    by_group_date: dict[tuple, list] = {}
+    run_activities_by_date: dict[str, list] = {}
     for a in activities:
-        key = (classify(a), (a.get("start") or "")[:10])
-        by_group_date.setdefault(key, []).append(a)
+        if classify(a) == "run":
+            run_activities_by_date.setdefault((a.get("start") or "")[:10], []).append(a)
 
-    scores = []
-    for p in planned:
-        group = p["discipline"].split("_")[0]
-        matched = by_group_date.get((group, p["date"]), [])
-        if group == "strength":
-            done = bool(matched) or (p["date"], p["discipline"]) in logged_dates
-            scores.append(1.0 if done else 0.0)
-        else:
-            scores.append(session_execution_score(p, matched))
+    scores = [session_execution_score(p, run_activities_by_date.get(p["date"], [])) for p in planned]
 
     run_paces = [
         pace_sec_per_km(a.get("distance_km"), a.get("duration_min"))
@@ -359,17 +353,17 @@ def build_daily_rows(days: int = 7):
     pace_offset = recent_easy_pace_offset(phase_now) or 0
     apply_pace_offset = abs(pace_offset) >= 5
 
-    adjust_note = ""
+    run_adjust_note = ""
     if n_planned:
         if factor < 1.0:
-            adjust_note = f" (justeret ned {round((1 - factor) * 100)}% -- sidste uges pas blev i snit kun {round(execution * 100)}% gennemført)"
+            run_adjust_note = f" (justeret ned {round((1 - factor) * 100)}% -- sidste uges løbeture blev i snit kun {round(execution * 100)}% gennemført)"
         elif factor > 1.0:
-            adjust_note = " (justeret lidt op -- du overpræsterede sidste uges volumen)"
+            run_adjust_note = " (justeret lidt op -- du overpræsterede sidste uges løbevolumen)"
         if avg_run_pace:
-            adjust_note += f" [snit løbepace sidste uge: {avg_run_pace}]"
+            run_adjust_note += f" [snit løbepace sidste uge: {avg_run_pace}]"
     if apply_pace_offset:
         direction = "langsommere" if pace_offset > 0 else "hurtigere"
-        adjust_note += f" [rolig-tempo justeret {direction} ud fra din faktiske pace sidste 14 dage]"
+        run_adjust_note += f" [rolig-tempo justeret {direction} ud fra din faktiske pace sidste 14 dage]"
 
     rows = []
     for i in range(days):
@@ -383,22 +377,25 @@ def build_daily_rows(days: int = 7):
         for kind in WEEKDAY_TEMPLATE[d.weekday()]:
             if kind == "run_long":
                 distance = round(week["long_run_km"] * factor, 1)
-                title, desc = "Langtur", f"{distance} km i {day_easy_pace}{adjust_note}"
+                title, desc = "Langtur", f"{distance} km i {day_easy_pace}{run_adjust_note}"
                 duration = None
             elif kind == "run_easy":
                 distance = round(easy_run_km(week["long_run_km"], phase) * factor, 1)
-                title, desc = "Rolig løbetur", f"~{distance} km i {day_easy_pace}{adjust_note}"
+                title, desc = "Rolig løbetur", f"~{distance} km i {day_easy_pace}{run_adjust_note}"
                 duration = None
             elif kind == "run_quality":
                 distance = round(quality_run_km(week["long_run_km"], phase) * factor, 1)
-                title, desc = week["key_session"], week["notes"] + adjust_note
+                title, quality_desc = quality_session(phase, day_easy_pace)
+                desc = f"{distance} km i alt. {quality_desc}{run_adjust_note}"
                 duration = None
             elif kind in ("bike_endurance", "bike_quality", "bike_recovery"):
+                # Deliberately NOT run-adjusted -- Zwift stays at the plan's
+                # fixed target regardless of how running went that week.
                 title = {"bike_endurance": "Zwift grundtur", "bike_quality": "Zwift intervaller",
                          "bike_recovery": "Zwift restitution"}[kind]
-                desc = bike_desc(kind, phase) + adjust_note
+                desc = bike_desc(kind, phase)
                 distance = None
-                duration = round(bike_minutes(phase, kind) * factor)
+                duration = bike_minutes(phase, kind)
             else:  # strength -- not volume-adjusted, consistency matters more here
                 title = {"strength_push": "Styrke: Push", "strength_pull": "Styrke: Pull",
                          "strength_legs": "Styrke: Legs"}[kind]
