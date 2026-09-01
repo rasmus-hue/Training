@@ -39,7 +39,8 @@ WEEKDAY_TEMPLATE = {
 }
 
 STEPS_GOAL = 12000
-MIN_RUN_KM = 5.0  # every run session, always -- current fitness handles this comfortably
+MIN_RUN_KM = 5.0  # floor for easy/long runs -- current fitness handles this comfortably
+MIN_QUALITY_RUN_KM = 3.0  # interval/tempo sessions (treadmill) are sized to the workout, not forced to 5 km
 
 
 def phase_for_week(w: int) -> str:
@@ -107,7 +108,9 @@ def easy_pace(phase: str, offset_sec: float = 0) -> str:
 
 
 def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, factor: float = 1.0) -> tuple[str, str, float]:
-    """Returns (title, description, total_km). The warm-up/easy portion and
+    """Returns (title, description, total_km). Run on a treadmill, so total
+    distance follows from what the workout needs -- not forced to the 5 km
+    floor that applies to easy/long runs. The warm-up/easy portion and
     the hard (tempo/interval/race-pace) portion are computed as real km that
     always sum exactly to total_km -- the description is built FROM the
     numbers, never stated as a separate, disconnected figure. `factor`
@@ -117,22 +120,22 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
     if phase == "race":
         return "Opvarmning til løbet", f"20-30 min let jog i {easy_pace_text} med et par stryg (korte accelerationer) undervejs", 3.0
 
-    base_ambition = max(MIN_RUN_KM, long_km * 0.55)
-    ambition_km = round(max(MIN_RUN_KM, base_ambition * factor), 1)
+    base_ambition = max(MIN_QUALITY_RUN_KM, long_km * 0.55)
+    ambition_km = round(max(MIN_QUALITY_RUN_KM, base_ambition * factor), 1)
 
     # Heavy pullback: not enough room for a real quality segment plus a
     # sensible warm-up -- better to just run easy and rebuild than to cram
     # a shrunken interval set into too little distance.
     if factor <= 0.75:
         return (
-            "Rolig løbetur (kvalitet sat på pause)",
+            "Rolig løbetur på løbebånd (kvalitet sat på pause)",
             f"{ambition_km} km i {easy_pace_text} -- ingen hård del denne gang, fokus på at komme tilbage på sporet",
             ambition_km,
         )
 
     if phase == "base":
         quality_km = min(max(0.8, round(ambition_km * 0.25, 1)), ambition_km - 1.0)
-        title, quality_pace, quality_label = "Rolig tempo-tur", "5:45-6:05/km", "sammenhængende"
+        title, quality_pace, quality_label = "Rolig tempo-tur (løbebånd)", "5:45-6:05/km", "sammenhængende"
     elif phase == "build1":
         rep_km, min_reps = 0.6, 3
         reps = max(min_reps, round((ambition_km * 0.35) / rep_km))
@@ -140,7 +143,7 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
         while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
             reps -= 1
             quality_km = round(reps * rep_km, 1)
-        title, quality_pace = "Tempo-intervaller", "5:35-5:55/km"
+        title, quality_pace = "Tempo-intervaller (løbebånd)", "5:35-5:55/km"
         quality_label = f"som {reps} x {round(rep_km * 1000)} m"
     elif phase in ("build2", "peak"):
         rep_km, min_reps = 1.0, 3
@@ -149,7 +152,7 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
         while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
             reps -= 1
             quality_km = round(reps * rep_km, 1)
-        title, quality_pace = "Race-pace intervaller", RACE_PACE
+        title, quality_pace = "Race-pace intervaller (løbebånd)", RACE_PACE
         quality_label = f"som {reps} x {rep_km:g} km"
     else:  # taper
         rep_km, min_reps = 0.8, 2
@@ -158,7 +161,7 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
         while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
             reps -= 1
             quality_km = round(reps * rep_km, 1)
-        title, quality_pace = "Kort skarphed", RACE_PACE
+        title, quality_pace = "Kort skarphed (løbebånd)", RACE_PACE
         quality_label = f"som {reps} x {round(rep_km * 1000)} m"
 
     easy_km = round(max(1.0, ambition_km - quality_km), 1)
