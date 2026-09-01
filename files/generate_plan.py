@@ -39,6 +39,7 @@ WEEKDAY_TEMPLATE = {
 }
 
 STEPS_GOAL = 12000
+MIN_RUN_KM = 5.0  # every run session, always -- current fitness handles this comfortably
 
 
 def phase_for_week(w: int) -> str:
@@ -78,13 +79,13 @@ def long_run_km(w: int, phase: str) -> float:
         val = {37: 16.5, 38: 17.5, 39: 18.0, 40: 18.0, 41: 15.0}[w]
     if is_cutback(w, phase):
         val *= 0.75
-    return round(val, 1)
+    return round(max(MIN_RUN_KM, val), 1)
 
 
 def easy_run_km(long_km: float, phase: str) -> float:
     if phase == "race":
-        return 3.0  # shakeout, not used race week itself
-    return round(max(3.0, long_km * 0.5), 1)
+        return 3.0  # shakeout the morning of race day, not a training session
+    return round(max(MIN_RUN_KM, long_km * 0.5), 1)
 
 
 EASY_PACE_RANGE_SEC = {
@@ -116,7 +117,8 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
     if phase == "race":
         return "Opvarmning til løbet", f"20-30 min let jog i {easy_pace_text} med et par stryg (korte accelerationer) undervejs", 3.0
 
-    ambition_km = round(max(3.0, long_km * 0.55) * factor, 1)
+    base_ambition = max(MIN_RUN_KM, long_km * 0.55)
+    ambition_km = round(max(MIN_RUN_KM, base_ambition * factor), 1)
 
     # Heavy pullback: not enough room for a real quality segment plus a
     # sensible warm-up -- better to just run easy and rebuild than to cram
@@ -286,26 +288,36 @@ def session_execution_score(planned_row: dict, matched: list[dict]) -> float:
     return round(min(1.2, ratio), 2)  # cap credit for overdoing the volume
 
 
-def recent_execution(lookback_days: int = 7) -> tuple[float, int, "str | None"]:
-    """How well the last week's RUNNING plan actually went: for each planned
-    run, how much of the prescribed distance was actually covered (not just
-    yes/no), averaged across the week. Run-only on purpose -- this score
-    drives the run-volume adjustment, and Zwift/strength performance
-    shouldn't pull your running targets around (nor vice versa; bike and
-    strength targets don't use this at all).
+def recent_execution() -> tuple[float, int, "str | None"]:
+    """How well the last COMPLETED calendar week's (Mon-Sun) RUNNING plan
+    actually went: for each planned run, how much of the prescribed distance
+    was actually covered (not just yes/no), averaged across the week.
+    Run-only on purpose -- this score drives the run-volume adjustment, and
+    Zwift/strength performance shouldn't pull your running targets around
+    (nor vice versa; bike and strength targets don't use this at all).
+
+    Calendar-week, not a rolling trailing window: the same result holds for
+    the entire current week regardless of which day it's generated on, and
+    it resets cleanly every Monday based on the week that just closed --
+    matching "this week" / "last week" the way a person actually means it,
+    rather than a window that straddles two different weeks depending on
+    what day happens to run the generator.
     Returns (avg_run_execution, n_runs_planned, average run pace last week or None).
     """
-    since = (TODAY - timedelta(days=lookback_days)).isoformat()
+    this_monday = TODAY - timedelta(days=TODAY.weekday())
+    last_monday = this_monday - timedelta(days=7)
+    since, until = last_monday.isoformat(), this_monday.isoformat()  # [since, until) = last Mon..Sun
+
     all_planned = supabase_get(
         "plan_daily", "date,discipline,target_distance_km,target_duration_min",
-        f"date=gte.{since}&date=lt.{TODAY.isoformat()}",
+        f"date=gte.{since}&date=lt.{until}",
     )
     planned = [p for p in all_planned if p["discipline"].split("_")[0] == "run"]
     if not planned:
         return 1.0, 0, None
 
     activities = supabase_get(
-        "garmin_activities", "start,type,name,distance_km,duration_min", f"start=gte.{since}"
+        "garmin_activities", "start,type,name,distance_km,duration_min", f"start=gte.{since}&start=lt.{until}"
     )
     run_activities_by_date: dict[str, list] = {}
     for a in activities:
@@ -417,12 +429,12 @@ def build_daily_rows(days: int = 7):
         day_easy_pace = easy_pace(phase, pace_offset if apply_pace_offset else 0)
         for kind in WEEKDAY_TEMPLATE[d.weekday()]:
             if kind == "run_long":
-                distance = round(week["long_run_km"] * factor, 1)
+                distance = round(max(MIN_RUN_KM, week["long_run_km"] * factor), 1)
                 title, desc = "Langtur", f"{distance} km i {day_easy_pace}{run_adjust_note}"
                 duration = None
             elif kind == "run_easy":
-                distance = round(easy_run_km(week["long_run_km"], phase) * factor, 1)
-                title, desc = "Rolig løbetur", f"~{distance} km i {day_easy_pace}{run_adjust_note}"
+                distance = round(max(MIN_RUN_KM, easy_run_km(week["long_run_km"], phase) * factor), 1)
+                title, desc = "Rolig løbetur", f"{distance} km i {day_easy_pace}{run_adjust_note}"
                 duration = None
             elif kind == "run_quality":
                 title, quality_desc, distance = build_quality_workout(week["long_run_km"], phase, day_easy_pace, factor)
