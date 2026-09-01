@@ -97,9 +97,9 @@ EASY_PACE_RANGE_SEC = {
 # range on a single repeat) and a fixed jog/walk recovery between reps.
 # Race pace is ~5:15-5:25/km -- intervals from build2 onward are deliberately
 # faster than that (a "speed reserve"), not just a repeat of race pace.
-QUALITY_REP_PACE_SEC = {"build1": 335, "build2": 305, "peak": 295, "taper": 305}  # 5:35, 5:05, 4:55, 5:05 /km
+QUALITY_REP_PACE_SEC = {"build1": 325, "build2": 295, "peak": 285, "taper": 295}  # 5:25, 4:55, 4:45, 4:55 /km
 QUALITY_REP_REST_SEC = {"build1": 90, "build2": 120, "peak": 120, "taper": 90}
-QUALITY_TEMPO_RANGE_SEC = (345, 365)  # base-phase continuous tempo, 5:45-6:05/km
+QUALITY_TEMPO_RANGE_SEC = (335, 355)  # base-phase continuous tempo, 5:35-5:55/km
 
 
 def format_rest(sec: int) -> str:
