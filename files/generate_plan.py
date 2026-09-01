@@ -99,6 +99,7 @@ EASY_PACE_RANGE_SEC = {
 # faster than that (a "speed reserve"), not just a repeat of race pace.
 QUALITY_REP_PACE_SEC = {"build1": 335, "build2": 305, "peak": 295, "taper": 305}  # 5:35, 5:05, 4:55, 5:05 /km
 QUALITY_REP_REST_SEC = {"build1": 90, "build2": 120, "peak": 120, "taper": 90}
+QUALITY_TEMPO_RANGE_SEC = (345, 365)  # base-phase continuous tempo, 5:45-6:05/km
 
 
 def format_rest(sec: int) -> str:
@@ -120,7 +121,9 @@ def easy_pace(phase: str, offset_sec: float = 0) -> str:
     return format_pace_range(lo + offset_sec, hi + offset_sec)
 
 
-def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, factor: float = 1.0) -> tuple[str, str, float]:
+def build_quality_workout(
+    long_km: float, phase: str, easy_pace_text: str, factor: float = 1.0, pace_offset_sec: float = 0
+) -> tuple[str, str, float]:
     """Returns (title, description, total_km). Run on a treadmill, so total
     distance follows from what the workout needs -- not forced to the 5 km
     floor that applies to easy/long runs. The warm-up/easy portion and
@@ -129,7 +132,11 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
     numbers, never stated as a separate, disconnected figure. `factor`
     (the run-execution adjustment) scales the whole session's ambition
     before the split, so a pulled-back week is a smaller version of the
-    same structure, not a mismatched leftover fraction."""
+    same structure, not a mismatched leftover fraction. `pace_offset_sec`
+    carries the same real-pace signal that adjusts the easy-pace band onto
+    the tempo/interval pace too -- so as your actual running proves faster
+    or slower than the phase assumed, the hard paces move with it instead
+    of sitting fixed all phase."""
     if phase == "race":
         return "Opvarmning til løbet", f"20-30 min let jog i {easy_pace_text} med et par stryg (korte accelerationer) undervejs", 3.0
 
@@ -149,7 +156,9 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
     reps_based = phase != "base"
     if phase == "base":
         quality_km = min(max(0.8, round(ambition_km * 0.25, 1)), ambition_km - 1.0)
-        title, quality_label = "Rolig tempo-tur (løbebånd)", "sammenhængende i 5:45-6:05/km"
+        lo, hi = QUALITY_TEMPO_RANGE_SEC
+        title = "Rolig tempo-tur (løbebånd)"
+        quality_label = f"sammenhængende i {format_pace_range(lo + pace_offset_sec, hi + pace_offset_sec)}"
     elif phase == "build1":
         rep_km, min_reps = 0.6, 3
         reps = max(min_reps, round((ambition_km * 0.35) / rep_km))
@@ -159,7 +168,7 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
             quality_km = round(reps * rep_km, 1)
         title = "Tempo-intervaller (løbebånd)"
         quality_label = (
-            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC['build1'])}, "
+            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC['build1'] + pace_offset_sec)}, "
             f"{format_rest(QUALITY_REP_REST_SEC['build1'])} pause mellem hvert interval"
         )
     elif phase in ("build2", "peak"):
@@ -171,7 +180,7 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
             quality_km = round(reps * rep_km, 1)
         title = "Speed-intervaller (løbebånd)"
         quality_label = (
-            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC[phase])}, "
+            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC[phase] + pace_offset_sec)}, "
             f"{format_rest(QUALITY_REP_REST_SEC[phase])} pause mellem hvert interval"
         )
     else:  # taper
@@ -183,7 +192,7 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
             quality_km = round(reps * rep_km, 1)
         title = "Kort skarphed (løbebånd)"
         quality_label = (
-            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC['taper'])}, "
+            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC['taper'] + pace_offset_sec)}, "
             f"{format_rest(QUALITY_REP_REST_SEC['taper'])} pause mellem hvert interval"
         )
 
@@ -448,7 +457,7 @@ def build_daily_rows(days: int = 7):
             run_adjust_note += f" [snit løbepace sidste uge: {avg_run_pace}]"
     if apply_pace_offset:
         direction = "langsommere" if pace_offset > 0 else "hurtigere"
-        run_adjust_note += f" [rolig-tempo justeret {direction} ud fra din faktiske pace sidste 14 dage]"
+        run_adjust_note += f" [pace justeret {direction} ud fra din faktiske pace sidste 14 dage]"
 
     rows = []
     for i in range(days):
@@ -469,7 +478,10 @@ def build_daily_rows(days: int = 7):
                 title, desc = "Rolig løbetur", f"{distance} km i {day_easy_pace}{run_adjust_note}"
                 duration = None
             elif kind == "run_quality":
-                title, quality_desc, distance = build_quality_workout(week["long_run_km"], phase, day_easy_pace, factor)
+                title, quality_desc, distance = build_quality_workout(
+                    week["long_run_km"], phase, day_easy_pace, factor,
+                    pace_offset if apply_pace_offset else 0,
+                )
                 desc = f"{quality_desc}{run_adjust_note}"
                 duration = None
             elif kind in ("bike_endurance", "bike_quality", "bike_recovery"):
