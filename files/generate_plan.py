@@ -22,7 +22,6 @@ PLAN_START_MONDAY = date(2026, 8, 17)
 TODAY = date.today()
 RACE_DAY = date(2027, 6, 20)
 RACE_GOAL = "1:50-1:55 halvmaraton"
-RACE_PACE = "5:15-5:25/km"
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
@@ -94,6 +93,18 @@ EASY_PACE_RANGE_SEC = {
     "peak": (345, 365), "taper": (350, 370), "race": (360, 380),
 }  # seconds/km -- matches the strings below exactly, kept numeric so it's adjustable
 
+# Interval reps: one concrete target pace (not a range -- you can't hit a
+# range on a single repeat) and a fixed jog/walk recovery between reps.
+QUALITY_REP_PACE_SEC = {"build1": 345, "build2": 320, "peak": 320, "taper": 320}  # 5:45, 5:20, 5:20, 5:20 /km
+QUALITY_REP_REST_SEC = {"build1": 90, "build2": 120, "peak": 120, "taper": 90}
+
+
+def format_rest(sec: int) -> str:
+    m, s = divmod(sec, 60)
+    if s == 0:
+        return f"{m} min"
+    return f"{m}:{s:02d} min"
+
 
 def format_pace_range(lo_sec: float, hi_sec: float) -> str:
     def fmt(s):
@@ -133,9 +144,10 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
             ambition_km,
         )
 
+    reps_based = phase != "base"
     if phase == "base":
         quality_km = min(max(0.8, round(ambition_km * 0.25, 1)), ambition_km - 1.0)
-        title, quality_pace, quality_label = "Rolig tempo-tur (løbebånd)", "5:45-6:05/km", "sammenhængende"
+        title, quality_label = "Rolig tempo-tur (løbebånd)", "sammenhængende i 5:45-6:05/km"
     elif phase == "build1":
         rep_km, min_reps = 0.6, 3
         reps = max(min_reps, round((ambition_km * 0.35) / rep_km))
@@ -143,8 +155,11 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
         while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
             reps -= 1
             quality_km = round(reps * rep_km, 1)
-        title, quality_pace = "Tempo-intervaller (løbebånd)", "5:35-5:55/km"
-        quality_label = f"som {reps} x {round(rep_km * 1000)} m"
+        title = "Tempo-intervaller (løbebånd)"
+        quality_label = (
+            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC['build1'])}, "
+            f"{format_rest(QUALITY_REP_REST_SEC['build1'])} pause mellem hvert interval"
+        )
     elif phase in ("build2", "peak"):
         rep_km, min_reps = 1.0, 3
         reps = max(min_reps, round((ambition_km * 0.45) / rep_km))
@@ -152,8 +167,11 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
         while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
             reps -= 1
             quality_km = round(reps * rep_km, 1)
-        title, quality_pace = "Race-pace intervaller (løbebånd)", RACE_PACE
-        quality_label = f"som {reps} x {rep_km:g} km"
+        title = "Race-pace intervaller (løbebånd)"
+        quality_label = (
+            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC[phase])}, "
+            f"{format_rest(QUALITY_REP_REST_SEC[phase])} pause mellem hvert interval"
+        )
     else:  # taper
         rep_km, min_reps = 0.8, 2
         reps = max(min_reps, round((ambition_km * 0.30) / rep_km))
@@ -161,15 +179,24 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
         while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
             reps -= 1
             quality_km = round(reps * rep_km, 1)
-        title, quality_pace = "Kort skarphed (løbebånd)", RACE_PACE
-        quality_label = f"som {reps} x {round(rep_km * 1000)} m"
+        title = "Kort skarphed (løbebånd)"
+        quality_label = (
+            f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC['taper'])}, "
+            f"{format_rest(QUALITY_REP_REST_SEC['taper'])} pause mellem hvert interval"
+        )
 
     easy_km = round(max(1.0, ambition_km - quality_km), 1)
     total_km = round(easy_km + quality_km, 1)
-    desc = (
-        f"{easy_km} km opvarmning/let løb i {easy_pace_text}, plus {quality_km} km {quality_label} "
-        f"i {quality_pace} (lette pauser undervejs) -- {total_km} km i alt"
-    )
+    if reps_based:
+        desc = (
+            f"{easy_km} km opvarmning/let løb i {easy_pace_text}, derefter {quality_label} "
+            f"-- {total_km} km i alt"
+        )
+    else:
+        desc = (
+            f"{easy_km} km opvarmning/let løb i {easy_pace_text}, plus {quality_km} km {quality_label} "
+            f"-- {total_km} km i alt"
+        )
     return title, desc, total_km
 
 
