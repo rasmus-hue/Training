@@ -95,7 +95,9 @@ EASY_PACE_RANGE_SEC = {
 
 # Interval reps: one concrete target pace (not a range -- you can't hit a
 # range on a single repeat) and a fixed jog/walk recovery between reps.
-QUALITY_REP_PACE_SEC = {"build1": 345, "build2": 320, "peak": 320, "taper": 320}  # 5:45, 5:20, 5:20, 5:20 /km
+# Race pace is ~5:15-5:25/km -- intervals from build2 onward are deliberately
+# faster than that (a "speed reserve"), not just a repeat of race pace.
+QUALITY_REP_PACE_SEC = {"build1": 335, "build2": 305, "peak": 295, "taper": 305}  # 5:35, 5:05, 4:55, 5:05 /km
 QUALITY_REP_REST_SEC = {"build1": 90, "build2": 120, "peak": 120, "taper": 90}
 
 
@@ -167,7 +169,7 @@ def build_quality_workout(long_km: float, phase: str, easy_pace_text: str, facto
         while quality_km > ambition_km - 1.0 and reps > min_reps - 1:
             reps -= 1
             quality_km = round(reps * rep_km, 1)
-        title = "Race-pace intervaller (løbebånd)"
+        title = "Speed-intervaller (løbebånd)"
         quality_label = (
             f"{reps} x {round(rep_km * 1000)} m i {format_pace(QUALITY_REP_PACE_SEC[phase])}, "
             f"{format_rest(QUALITY_REP_REST_SEC[phase])} pause mellem hvert interval"
