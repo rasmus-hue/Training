@@ -828,11 +828,11 @@ async function loadDashboard() {
   let wellness = [], activities = [], planWeekly = [], planDaily = [], strengthLog = [];
   try {
     const [wRes, aRes, pwRes, pdRes, slRes] = await Promise.all([
-      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.desc&limit=90`, { headers }),
-      fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=200`, { headers }),
-      fetch(`${base}/rest/v1/plan_weekly?select=*&order=week_start.asc&limit=52`, { headers }),
-      fetch(`${base}/rest/v1/plan_daily?select=*&order=date.desc&limit=100`, { headers }),
-      fetch(`${base}/rest/v1/strength_log?select=*&order=date.desc&limit=200`, { headers }),
+      fetch(`${base}/rest/v1/garmin_wellness?select=*&order=date.desc&limit=90`, { headers, cache: "no-store" }),
+      fetch(`${base}/rest/v1/garmin_activities?select=*&order=start.desc&limit=200`, { headers, cache: "no-store" }),
+      fetch(`${base}/rest/v1/plan_weekly?select=*&order=week_start.asc&limit=52`, { headers, cache: "no-store" }),
+      fetch(`${base}/rest/v1/plan_daily?select=*&order=date.desc&limit=100`, { headers, cache: "no-store" }),
+      fetch(`${base}/rest/v1/strength_log?select=*&order=date.desc&limit=200`, { headers, cache: "no-store" }),
     ]);
     wellness = await wRes.json();
     activities = await aRes.json();
