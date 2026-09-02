@@ -143,16 +143,6 @@ def build_quality_workout(
     base_ambition = max(MIN_QUALITY_RUN_KM, long_km * 0.55)
     ambition_km = round(max(MIN_QUALITY_RUN_KM, base_ambition * factor), 1)
 
-    # Heavy pullback: not enough room for a real quality segment plus a
-    # sensible warm-up -- better to just run easy and rebuild than to cram
-    # a shrunken interval set into too little distance.
-    if factor <= 0.75:
-        return (
-            "Rolig løbetur på løbebånd (kvalitet sat på pause)",
-            f"{ambition_km} km i {easy_pace_text} -- ingen hård del denne gang, fokus på at komme tilbage på sporet",
-            ambition_km,
-        )
-
     reps_based = phase != "base"
     if phase == "base":
         quality_km = min(max(0.8, round(ambition_km * 0.25, 1)), ambition_km - 1.0)
@@ -383,6 +373,8 @@ def adjust_factor(execution: float) -> float:
     executed (missed, cut short, or otherwise below prescription) -- or nudge
     it up slightly when consistently over-delivered -- instead of blindly
     progressing the fixed macro formula regardless of what actually happened.
+    Kept gentle on the way down: a single rough week (illness, life, a plan
+    that just started) should ease off a bit, not gut the week's volume.
     """
     if execution >= 1.05:
         return 1.05
@@ -390,9 +382,9 @@ def adjust_factor(execution: float) -> float:
         return 1.0
     if execution >= 0.6:
         return 0.9
-    if execution >= 0.4:
-        return 0.75
-    return 0.6
+    if execution >= 0.3:
+        return 0.85
+    return 0.8
 
 
 def current_phase(weekly_by_monday: dict) -> str:
