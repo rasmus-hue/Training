@@ -26,6 +26,12 @@ RACE_GOAL = "1:50-1:55 halvmaraton"
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
+# One-off manual reset: skip the under-execution volume pullback for a single
+# run, e.g. after a week lost to illness/life rather than a real fitness dip.
+# Never set by the schedule -- only a manual workflow_dispatch can turn it on,
+# and it only affects the run it's passed to.
+FRESH_START = os.environ.get("FRESH_START", "").lower() == "true"
+
 WEEKDAY_TEMPLATE = {
     # 0=Mon .. 6=Sun
     0: ["bike_endurance", "strength_push"],
@@ -433,14 +439,16 @@ def recent_easy_pace_offset(phase: str, lookback_days: int = 14) -> "float | Non
 def build_daily_rows(days: int = 7):
     weekly_by_monday = {r["week_start"]: r for r in build_weekly_rows()}
     execution, n_planned, avg_run_pace = recent_execution()
-    factor = adjust_factor(execution)
+    factor = 1.0 if FRESH_START else adjust_factor(execution)
 
     phase_now = current_phase(weekly_by_monday)
     pace_offset = recent_easy_pace_offset(phase_now) or 0
     apply_pace_offset = abs(pace_offset) >= 5
 
     run_adjust_note = ""
-    if n_planned:
+    if FRESH_START:
+        run_adjust_note = " (frisk start denne uge -- ingen nedjustering fra sidste uge)"
+    elif n_planned:
         if factor < 1.0:
             run_adjust_note = f" (justeret ned {round((1 - factor) * 100)}% -- sidste uges løbeture blev i snit kun {round(execution * 100)}% gennemført)"
         elif factor > 1.0:

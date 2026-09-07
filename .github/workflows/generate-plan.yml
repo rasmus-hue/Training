@@ -5,7 +5,12 @@ on:
     # 20 min after the Garmin sync (garmin-sync.yml runs at 11:00 UTC), so
     # today's adherence check sees freshly synced activity data.
     - cron: "20 11 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      fresh_start:
+        description: "Skip this run's under-execution volume pullback (one-off reset, e.g. after a week lost to illness/life)"
+        required: false
+        default: "false"
 
 jobs:
   generate:
@@ -21,4 +26,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          FRESH_START: ${{ github.event.inputs.fresh_start || 'false' }}
         run: python files/generate_plan.py
